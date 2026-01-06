@@ -1,0 +1,90 @@
+import type React from "react";
+
+export const styles: Record<string, React.CSSProperties> = {
+  actions: { display: "flex", gap: 10, flexWrap: "wrap" },
+  primaryBtn: {
+    border: 0,
+    background: "#4f7cff",
+    color: "white",
+    padding: "10px 14px",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  secondaryBtn: {
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "transparent",
+    color: "#e8eaf0",
+    padding: "10px 14px",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  muted: { color: "rgba(232,234,240,0.7)", marginTop: 8, marginBottom: 16 },
+  error: { color: "#ff6b6b" },
+};
+
+export const layout: Record<string, React.CSSProperties> = {
+    shell: {
+    width: "100%",
+    minHeight: "100vh",
+    background: "#0b0d12",
+    color: "#e8eaf0",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+    },
+  header: {
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+    height: 64,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 18px",
+    background: "rgba(18,23,38,0.85)",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    backdropFilter: "blur(10px)",
+  },
+  brand: {
+    fontWeight: 800,
+    letterSpacing: 0.2,
+    fontSize: 18,
+    textDecoration: "none",
+    color: "#e8eaf0",
+  },
+  nav: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginLeft: 18,
+  },
+  navLink: {
+    textDecoration: "none",
+    color: "rgba(232,234,240,0.75)",
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid transparent",
+  },
+  navLinkActive: {
+    color: "#e8eaf0",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.10)",
+  },
+  headerLeft: { display: "flex", alignItems: "center" },
+  headerRight: { display: "flex", alignItems: "center", gap: 10 },
+content: {
+  width: "100%",
+  padding: "32px 24px",
+  display: "flex",
+  justifyContent: "center",
+},
+card: {
+  width: "100%",
+  maxWidth: 1100,
+  background: "#121726",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 20,
+  padding: 28,
+  boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+},
+};
