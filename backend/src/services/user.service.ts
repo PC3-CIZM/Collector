@@ -22,3 +22,20 @@ export async function upsertUserFromAuth(auth: any, emailFromClient: string | nu
   const { rows } = await db.query(q, [auth0Id, email]);
   return rows[0];
 }
+
+export async function assignInitialRoleIfMissing(
+  userId: number,
+  role: "BUYER" | "SELLER"
+) {
+  await db.query(
+    `
+    INSERT INTO user_roles (user_id, role)
+    SELECT $1, $2
+    WHERE NOT EXISTS (
+      SELECT 1 FROM user_roles WHERE user_id = $1
+    )
+    `,
+    [userId, role]
+  );
+}
+

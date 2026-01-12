@@ -26,6 +26,7 @@ function AppShell() {
       }
 
       const email = user?.email ?? null;
+      const role = sessionStorage.getItem("register_role"); // "BUYER" | "SELLER" | null
 
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -37,11 +38,15 @@ function AppShell() {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ email, role }),
           });
 
           if (!res.ok) throw new Error(await res.text());
           const dbUser = await res.json();
+
+          if (role) {
+            sessionStorage.removeItem("register_role");
+          }
 
           setMe(dbUser);
           setSyncError(null);
