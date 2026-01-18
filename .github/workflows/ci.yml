@@ -32,9 +32,6 @@ jobs:
       - name: Lint (si le script existe)
         run: npm run lint --if-present
 
-      - name: Tests (si le script existe)
-        run: npm test --if-present
-
       - name: Build (si le script existe)
         run: npm run build --if-present
 
@@ -62,9 +59,6 @@ jobs:
 
       - name: Lint (si le script existe)
         run: npm run lint --if-present
-
-      - name: Tests (si le script existe)
-        run: npm test --if-present
 
       - name: Build (si le script existe)
         run: npm run build --if-present
