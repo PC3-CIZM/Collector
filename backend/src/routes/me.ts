@@ -35,6 +35,7 @@ meRouter.post("/me/sync", requireAuth, async (req, res, next) => {
       id: user.id,
       email: user.email,
       displayName: user.display_name,
+      roles: user.roles || [],
     });
   } catch (err) {
     next(err);

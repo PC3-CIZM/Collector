@@ -1,22 +1,43 @@
 import { NavLink, Link } from "react-router-dom";
 import { layout } from "../styles/ui";
 import { ProfileMenu } from "../components/auth/ProfileMenu";
-import { useMe } from "../state/me";
+import { useMe, isAdmin } from "../state/me";
 
 export function Header() {
   const { me } = useMe();
+  const admin = isAdmin(me);
 
   return (
     <header style={layout.header}>
       <div style={layout.headerLeft}>
         <Link to="/" style={layout.brand}>Collector.shop</Link>
+
         <nav style={layout.nav}>
-          <NavLink to="/service1" style={({isActive}) => ({...layout.navLink, ...(isActive ? layout.navLinkActive : {})})}>
+          <NavLink to="/service1" style={({ isActive }) => ({
+            ...layout.navLink,
+            ...(isActive ? layout.navLinkActive : {}),
+          })}>
             Service1
           </NavLink>
-          <NavLink to="/service2" style={({isActive}) => ({...layout.navLink, ...(isActive ? layout.navLinkActive : {})})}>
+
+          <NavLink to="/service2" style={({ isActive }) => ({
+            ...layout.navLink,
+            ...(isActive ? layout.navLinkActive : {}),
+          })}>
             Service2
           </NavLink>
+
+          {admin && (
+            <NavLink
+              to="/admin"
+              style={({ isActive }) => ({
+                ...layout.navLink,
+                ...(isActive ? layout.navLinkActive : {}),
+              })}
+            >
+              Admin
+            </NavLink>
+          )}
         </nav>
       </div>
 

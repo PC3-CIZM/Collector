@@ -14,6 +14,12 @@ const schema = z.object({
   DB_NAME: z.string().min(1),
 
   KAFKA_BROKER: z.string().min(1),
+
+  // Auth0 Management API credentials used for administrative actions like blocking
+  // or deleting users. These credentials should be provided by your Auth0 tenant.
+  AUTH0_MGMT_CLIENT_ID: z.string().min(1),
+  AUTH0_MGMT_CLIENT_SECRET: z.string().min(1),
+  AUTH0_MGMT_AUDIENCE: z.string().url(),
 });
 
 export const env = schema.parse(process.env);

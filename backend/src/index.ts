@@ -9,6 +9,7 @@ import { meRouter } from "./routes/me";
 import { errorHandler } from "./middleware/error";
 import { startProducer, stopProducer } from "./kafka/producer";
 import { profileRouter } from "./routes/display.name";
+import { adminRouter } from "./routes/admin";
 
 async function main() {
   const app = express();
@@ -21,6 +22,9 @@ async function main() {
   app.use(healthRouter);
   app.use(meRouter);
   app.use(profileRouter);
+  // Admin routes must come after auth middleware is registered. The
+  // adminRouter applies its own requireAuth and requireRole('ADMIN') middlewares.
+  app.use(adminRouter);
 
   app.use(errorHandler);
 

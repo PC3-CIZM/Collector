@@ -3,6 +3,8 @@ import { AppLayout } from "./layout/AppLayout";
 import HomePage from "./pages/HomePage";
 import Service1Page from "./pages/Service1Page";
 import Service2Page from "./pages/Service2Page";
+import AdminPage from "./pages/admin/AdminPage";
+import { AdminRoute } from "./routes/AdminRoute";
 
 export default function App() {
   return (
@@ -12,6 +14,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/service1" element={<Service1Page />} />
           <Route path="/service2" element={<Service2Page />} />
+          <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>
