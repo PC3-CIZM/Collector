@@ -15,7 +15,7 @@ export function DisplayNameModal({ isOpen, onSave, error }: Props) {
   return (
     <div style={overlay} role="dialog" aria-modal="true">
       <div style={modal}>
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Choisis un display name</h2>
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Choisis un nom</h2>
 
         <p style={styles.muted}>
           3–30 caractères. Lettres/chiffres + <code>_</code> ou <code>-</code>.

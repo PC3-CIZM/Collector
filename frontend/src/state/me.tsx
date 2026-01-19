@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from "react";
 
-export type Me = { id: number; email: string | null; displayName: string | null };
+export type Me = { id: number; email: string | null; displayName: string | null; roles: string[] };
 
 type MeCtx = {
   me: Me | null;
@@ -19,3 +19,7 @@ export function useMe() {
   if (!ctx) throw new Error("useMe must be used within MeProvider");
   return ctx;
 }
+
+export const isAdmin = (me: any | null) => {
+  return me?.roles?.includes("ADMIN");
+};

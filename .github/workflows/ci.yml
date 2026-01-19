@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  # La CI se lance à chaque push sur develop
+  push:
+    branches: [ develop ]
+  # Et à chaque Pull Request vers develop
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  # =========================
+  # 1) JOB BACKEND
+  # =========================
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest   # GitHub lance une VM Ubuntu
+
+    # Toutes les commandes "run" se font dans le dossier backend/
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      # 1. Récupérer le code du repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Installer Node.js (version 20) dans la VM
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # 3. Installer les dépendances du backend (à partir de package-lock.json)
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Lancer le lint SI le script existe dans package.json
+      #    continue-on-error: true => même si eslint trouve des erreurs,
+      #    le job continue (la CI ne devient pas rouge à cause du lint).
+      - name: Lint (si le script existe - n'empêche pas la CI)
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      # 5. Build du backend (transpile TypeScript, etc.) SI le script existe
+      #    Si le build casse => le job échoue (bloquant, c'est normal).
+      - name: Build (si le script existe)
+        run: npm run build --if-present
+
+  # =========================
+  # 2) JOB FRONTEND
+  # =========================
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+
+    # Toutes les commandes "run" se font dans le dossier frontend/
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      # 1. Récupérer le code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Installer Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Installer les dépendances du frontend
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Lancer le lint (non bloquant, comme pour le backend)
+      - name: Lint (si le script existe - n'empêche pas la CI)
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      # 5. Build du frontend (Vite, etc.)
+      - name: Build (si le script existe)
+        run: npm run build --if-present
+
+  # =========================
+  # 3) JOB DOCKER : build + push des images
+  # =========================
+  docker-build:
+    name: Build & push Docker images
+    runs-on: ubuntu-latest
+
+    # Ce job n'est lancé que si backend ET frontend ont réussi
+    needs: [backend, frontend]
+
+    # On donne les droits pour publier des images (packages) dans GHCR
+    permissions:
+      contents: read       # lire le code
+      packages: write      # pousser des images dans ghcr.io
+
+    env:
+      # Nom du registre Docker de GitHub
+      REGISTRY: ghcr.io
+      # Nom de l'owner / organisation (ici PC3-CIZM, en minuscule)
+      OWNER: pc3-cizm
+      # Noms complets des images backend & frontend (sans tag)
+      IMAGE_BACKEND: ghcr.io/pc3-cizm/collector-backend
+      IMAGE_FRONTEND: ghcr.io/pc3-cizm/collector-frontend
+
+    steps:
+      # 1. Récupérer le code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Se connecter à GitHub Container Registry (ghcr.io)
+      #    On utilise le GITHUB_TOKEN fourni automatiquement par GitHub.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. Build de l'image Docker du backend avec deux tags :
+      #    - un tag unique par commit : collector-backend:<sha>
+      #    - un tag "develop" lisible : collector-backend:develop
+      - name: Build backend image
+        run: |
+          docker build -t $IMAGE_BACKEND:${{ github.sha }} ./backend
+          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:develop
+
+      # 4. Build de l'image Docker du frontend (même principe)
+      - name: Build frontend image
+        run: |
+          docker build -t $IMAGE_FRONTEND:${{ github.sha }} ./frontend
+          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:develop
+
+      # 5. Push des images backend vers GHCR
+      - name: Push backend images
+        run: |
+          docker push $IMAGE_BACKEND:${{ github.sha }}
+          docker push $IMAGE_BACKEND:develop
+
+      # 6. Push des images frontend vers GHCR
+      - name: Push frontend images
+        run: |
+          docker push $IMAGE_FRONTEND:${{ github.sha }}
+          docker push $IMAGE_FRONTEND:develop
+
+      # 7. Afficher les images locales (juste pour les logs)
+      - name: List built images
+        run: docker images | grep collector || true
