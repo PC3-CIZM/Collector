@@ -89,41 +89,63 @@ jobs:
         run: npm run build --if-present
 
   # =========================
-  # 3) JOB DOCKER : build des images
+  # 3) JOB DOCKER : build + push des images dans GHCR
   # =========================
   docker-build:
-    name: Build Docker images
+    name: Build & push Docker images
     runs-on: ubuntu-latest
 
     # Ce job n'est lancé que si backend ET frontend ont réussi
     needs: [backend, frontend]
+
+    # On donne le droit d'écrire dans GitHub Packages (GHCR)
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      # Noms des images dans GHCR (org = pc3-cizm)
+      IMAGE_BACKEND: ghcr.io/pc3-cizm/collector-backend
+      IMAGE_FRONTEND: ghcr.io/pc3-cizm/collector-frontend
 
     steps:
       # 1. Récupérer le code (on repart d'un checkout propre)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. (Facultatif) Connexion à un registry Docker
-      #    Pour l'instant on ne push pas les images, donc on ne se logue pas.
-      #    Si tu veux pousser plus tard, tu pourras utiliser DOCKERHUB_USERNAME/PASSWORD
-      #    stockés dans les "Secrets" GitHub.
-      # - name: Login to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # 2. Login à GitHub Container Registry (GHCR)
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. Build de l'image Docker du backend
-      #    -t collector-backend:${{ github.sha }} => nom de l'image + tag = identifiant du commit
+      # 3. Build + tag de l'image backend
       - name: Build backend image
-        run: docker build -t collector-backend:${{ github.sha }} ./backend
+        run: |
+          docker build -t $IMAGE_BACKEND:${{ github.sha }} ./backend
+          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:develop
 
-      # 4. Build de l'image Docker du frontend
+      # 4. Build + tag de l'image frontend
       - name: Build frontend image
-        run: docker build -t collector-frontend:${{ github.sha }} ./frontend
+        run: |
+          docker build -t $IMAGE_FRONTEND:${{ github.sha }} ./frontend
+          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:develop
 
-      # 5. Afficher la liste des images présentes dans la VM CI
-      #    (ça te permet de voir les images dans les logs GitHub Actions)
+      # 5. Push des images backend vers GHCR
+      - name: Push backend images
+        run: |
+          docker push $IMAGE_BACKEND:${{ github.sha }}
+          docker push $IMAGE_BACKEND:develop
+
+      # 6. Push des images frontend vers GHCR
+      - name: Push frontend images
+        run: |
+          docker push $IMAGE_FRONTEND:${{ github.sha }}
+          docker push $IMAGE_FRONTEND:develop
+
+      # 7. Afficher les images locales dans les logs
       - name: List built images
         run: docker images | grep collector || true
 
