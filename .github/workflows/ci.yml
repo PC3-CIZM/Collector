@@ -46,7 +46,7 @@ jobs:
         continue-on-error: true
 
       # 5. Build du backend (transpile TypeScript, etc.) SI le script existe
-      #    Si le build casse => le job échoue (bloquant, c'est normal).
+      #    Si le build casse => le job échoue (normal, c'est bloquant).
       - name: Build (si le script existe)
         run: npm run build --if-present
 
@@ -89,69 +89,105 @@ jobs:
         run: npm run build --if-present
 
   # =========================
-  # 3) JOB DOCKER : build + push des images
+  # 3) JOB DOCKER : build des images
   # =========================
   docker-build:
-    name: Build & push Docker images
+    name: Build Docker images
     runs-on: ubuntu-latest
 
     # Ce job n'est lancé que si backend ET frontend ont réussi
     needs: [backend, frontend]
 
-    # On donne les droits pour publier des images (packages) dans GHCR
-    permissions:
-      contents: read       # lire le code
-      packages: write      # pousser des images dans ghcr.io
-
-    env:
-      # Nom du registre Docker de GitHub
-      REGISTRY: ghcr.io
-      # Nom de l'owner / organisation (ici PC3-CIZM, en minuscule)
-      OWNER: pc3-cizm
-      # Noms complets des images backend & frontend (sans tag)
-      IMAGE_BACKEND: ghcr.io/pc3-cizm/collector-backend
-      IMAGE_FRONTEND: ghcr.io/pc3-cizm/collector-frontend
-
     steps:
-      # 1. Récupérer le code
+      # 1. Récupérer le code (on repart d'un checkout propre)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Se connecter à GitHub Container Registry (ghcr.io)
-      #    On utilise le GITHUB_TOKEN fourni automatiquement par GitHub.
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # 2. (Facultatif) Connexion à un registry Docker
+      #    Pour l'instant on ne push pas les images, donc on ne se logue pas.
+      #    Si tu veux pousser plus tard, tu pourras utiliser DOCKERHUB_USERNAME/PASSWORD
+      #    stockés dans les "Secrets" GitHub.
+      # - name: Login to Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Build de l'image Docker du backend avec deux tags :
-      #    - un tag unique par commit : collector-backend:<sha>
-      #    - un tag "develop" lisible : collector-backend:develop
+      # 3. Build de l'image Docker du backend
+      #    -t collector-backend:${{ github.sha }} => nom de l'image + tag = identifiant du commit
       - name: Build backend image
-        run: |
-          docker build -t $IMAGE_BACKEND:${{ github.sha }} ./backend
-          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:develop
+        run: docker build -t collector-backend:${{ github.sha }} ./backend
 
-      # 4. Build de l'image Docker du frontend (même principe)
+      # 4. Build de l'image Docker du frontend
       - name: Build frontend image
-        run: |
-          docker build -t $IMAGE_FRONTEND:${{ github.sha }} ./frontend
-          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:develop
+        run: docker build -t collector-frontend:${{ github.sha }} ./frontend
 
-      # 5. Push des images backend vers GHCR
-      - name: Push backend images
-        run: |
-          docker push $IMAGE_BACKEND:${{ github.sha }}
-          docker push $IMAGE_BACKEND:develop
-
-      # 6. Push des images frontend vers GHCR
-      - name: Push frontend images
-        run: |
-          docker push $IMAGE_FRONTEND:${{ github.sha }}
-          docker push $IMAGE_FRONTEND:develop
-
-      # 7. Afficher les images locales (juste pour les logs)
+      # 5. Afficher la liste des images présentes dans la VM CI
+      #    (ça te permet de voir les images dans les logs GitHub Actions)
       - name: List built images
         run: docker images | grep collector || true
+
+  # =========================
+  # 4) JOB DB : vérification base de données
+  # =========================
+  db-check:
+    name: Database CI
+    runs-on: ubuntu-latest
+
+    # On lance un conteneur PostgreSQL dédié pour la CI
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: collector_user
+          POSTGRES_PASSWORD: SuperSecretP@ssw0rd2025!
+          POSTGRES_DB: collector_db
+        ports:
+          - 5432:5432
+        # On ajoute un healthcheck pour attendre que Postgres soit prêt
+        options: >-
+          --health-cmd="pg_isready -U collector_user -d collector_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      # 1. Récupérer le code du repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Installer le client psql pour pouvoir parler à Postgres
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      # 3. Attendre que la base soit bien prête
+      - name: Wait for database to be ready
+        env:
+          PGPASSWORD: SuperSecretP@ssw0rd2025!
+        run: |
+          for i in {1..10}; do
+            pg_isready -h localhost -p 5432 -d collector_db -U collector_user && break
+            echo "Database not ready yet, waiting..."
+            sleep 3
+          done
+
+      # 4. Exécuter docker/init.sql si le fichier existe (création tables, données, etc.)
+      - name: Apply init.sql (if exists)
+        env:
+          PGPASSWORD: SuperSecretP@ssw0rd2025!
+        run: |
+          if [ -f docker/init.sql ]; then
+            echo "Found docker/init.sql, applying it..."
+            psql -h localhost -p 5432 -U collector_user -d collector_db -f docker/init.sql
+          else
+            echo "No docker/init.sql file, skipping schema init"
+          fi
+
+      # 5. Faire une requête simple pour vérifier que la DB répond
+      - name: Run simple smoke query
+        env:
+          PGPASSWORD: SuperSecretP@ssw0rd2025!
+        run: |
+          psql -h localhost -p 5432 -U collector_user -d collector_db -c "SELECT 1;"
