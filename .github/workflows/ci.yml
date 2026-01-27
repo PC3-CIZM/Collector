@@ -3,10 +3,10 @@ name: CI
 on:
   # La CI se lance à chaque push sur develop
   push:
-    branches: [ develop ]
+    branches: [ test ]
   # Et à chaque Pull Request vers develop
   pull_request:
-    branches: [ develop ]
+    branches: [ test ]
 
 jobs:
   # =========================
@@ -125,25 +125,25 @@ jobs:
       - name: Build backend image
         run: |
           docker build -t $IMAGE_BACKEND:${{ github.sha }} ./backend
-          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:develop
+          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:test
 
       # 4. Build + tag de l'image frontend
       - name: Build frontend image
         run: |
           docker build -t $IMAGE_FRONTEND:${{ github.sha }} ./frontend
-          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:develop
+          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:test
 
       # 5. Push des images backend vers GHCR
       - name: Push backend images
         run: |
           docker push $IMAGE_BACKEND:${{ github.sha }}
-          docker push $IMAGE_BACKEND:develop
+          docker push $IMAGE_BACKEND:test
 
       # 6. Push des images frontend vers GHCR
       - name: Push frontend images
         run: |
           docker push $IMAGE_FRONTEND:${{ github.sha }}
-          docker push $IMAGE_FRONTEND:develop
+          docker push $IMAGE_FRONTEND:test
 
       # 7. Afficher les images locales dans les logs
       - name: List built images
