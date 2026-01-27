@@ -176,4 +176,29 @@ CREATE TABLE IF NOT EXISTS  audit_logs (
     resource_id INT,
     details JSONB,
     created_at TIMESTAMP DEFAULT NOW()
+<<<<<<< HEAD
 );
+=======
+);
+
+CREATE TABLE IF NOT EXISTS item_moderation (
+  id SERIAL PRIMARY KEY,
+  item_id INT UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+
+  -- résultats auto-check
+  title_status VARCHAR(10) CHECK (title_status IN ('GREEN','ORANGE','RED')) DEFAULT 'ORANGE',
+  description_status VARCHAR(10) CHECK (description_status IN ('GREEN','ORANGE','RED')) DEFAULT 'ORANGE',
+  images_status VARCHAR(10) CHECK (images_status IN ('GREEN','ORANGE','RED')) DEFAULT 'ORANGE',
+  auto_score DECIMAL(4,2) DEFAULT 0,         -- 0..1
+  auto_details JSONB DEFAULT '{}'::jsonb,     -- réponse brute externe
+
+  -- validation humaine
+  human_status VARCHAR(20) CHECK (human_status IN ('PENDING','APPROVED','REJECTED')) DEFAULT 'PENDING',
+  reviewed_by INT REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  reviewer_note TEXT,
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+>>>>>>> 00e5f317067658cb638802b2a4358b9c834f1f64

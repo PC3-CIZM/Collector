@@ -30,7 +30,11 @@ async function main() {
 
   await startProducer();
 
+<<<<<<< HEAD
   const server = app.listen(env.PORT, () => {
+=======
+  const server = app.listen(env.PORT, "0.0.0.0", () => {
+>>>>>>> 00e5f317067658cb638802b2a4358b9c834f1f64
     console.log(`API listening on :${env.PORT}`);
   });
 
