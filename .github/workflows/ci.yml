@@ -3,10 +3,10 @@ name: CI
 on:
   # La CI se lance à chaque push sur develop
   push:
-    branches: [ test ]
+    branches: [ develop ]
   # Et à chaque Pull Request vers develop
   pull_request:
-    branches: [ test ]
+    branches: [ develop ]
 
 jobs:
   # =========================
