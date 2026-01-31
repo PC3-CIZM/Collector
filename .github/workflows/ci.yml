@@ -14,7 +14,7 @@ jobs:
   # =========================
   backend:
     name: Backend CI
-    runs-on: ubuntu-latest   # GitHub lance une VM Ubuntu
+    runs-on: ubuntu-latest   # GitHub  une VM Ubuntu
 
     # Toutes les commandes "run" se font dans le dossier backend/
     defaults:
