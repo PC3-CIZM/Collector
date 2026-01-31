@@ -198,3 +198,17 @@ CREATE TABLE IF NOT EXISTS item_moderation (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS item_reviews (
+  id SERIAL PRIMARY KEY,
+  item_id INT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  admin_id INT REFERENCES users(id),
+  decision VARCHAR(20) CHECK (decision IN ('PUBLISHED', 'REJECTED')) NOT NULL,
+  notes TEXT NOT NULL,
+  traffic_photo VARCHAR(10) CHECK (traffic_photo IN ('GREEN', 'ORANGE', 'RED')) DEFAULT 'GREEN',
+  traffic_title VARCHAR(10) CHECK (traffic_title IN ('GREEN', 'ORANGE', 'RED')) DEFAULT 'GREEN',
+  traffic_description VARCHAR(10) CHECK (traffic_description IN ('GREEN', 'ORANGE', 'RED')) DEFAULT 'GREEN',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_reviews_item_id ON item_reviews(item_id);

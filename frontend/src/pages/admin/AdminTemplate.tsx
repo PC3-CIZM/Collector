@@ -5,13 +5,14 @@ import type { ReactNode } from "react";
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
 
-export type AdminTabKey = "users" | "categories";
+export type AdminTabKey = "users" | "categories" | "collector";
 
 export default function AdminTemplate(props: {
   activeKey: AdminTabKey;
   onChange: (k: AdminTabKey) => void;
   users: ReactNode;
   categories: ReactNode;
+  collector: ReactNode;
 }) {
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -45,6 +46,15 @@ export default function AdminTemplate(props: {
                 </span>
               ),
               children: props.categories,
+            },
+            {
+              key: "collector",
+              label: (
+                <span>
+                  <AppstoreOutlined /> TheCollector
+                </span>
+              ),
+              children: props.collector,
             },
           ]}
         />

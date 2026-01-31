@@ -1,11 +1,12 @@
 import { NavLink, Link } from "react-router-dom";
 import { layout } from "../styles/ui";
 import { ProfileMenu } from "../components/auth/ProfileMenu";
-import { useMe, isAdmin } from "../state/me";
+import { useMe, isAdmin, isSeller } from "../state/me";
 
 export function Header() {
   const { me } = useMe();
   const admin = isAdmin(me);
+  const seller = isSeller(me);
 
   return (
     <header style={layout.header}>
@@ -26,6 +27,18 @@ export function Header() {
           })}>
             Service2
           </NavLink>
+
+          {seller && (
+            <NavLink
+              to="/seller/items"
+              style={({ isActive }) => ({
+                ...layout.navLink,
+                ...(isActive ? layout.navLinkActive : {}),
+              })}
+            >
+              Vendeur
+            </NavLink>
+          )}
 
           {admin && (
             <NavLink

@@ -7,9 +7,11 @@ import { env } from "./config/env";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 import { errorHandler } from "./middleware/error";
-import { startProducer, stopProducer } from "./kafka/producer";
+// import { startProducer, stopProducer } from "./kafka/producer";
 import { profileRouter } from "./routes/display.name";
 import { adminRouter } from "./routes/admin";
+import { sellerRouter } from "./routes/seller";
+import { publicCategoriesRouter } from "./routes/public.categories";
 
 async function main() {
   const app = express();
@@ -22,13 +24,15 @@ async function main() {
   app.use(healthRouter);
   app.use(meRouter);
   app.use(profileRouter);
+  app.use(publicCategoriesRouter);
+  app.use("/seller", sellerRouter);
   // Admin routes must come after auth middleware is registered. The
   // adminRouter applies its own requireAuth and requireRole('ADMIN') middlewares.
-  app.use(adminRouter);
+  app.use("/admin", adminRouter);
 
   app.use(errorHandler);
 
-  await startProducer();
+  // await startProducer();
 
   const server = app.listen(env.PORT, () => {
     console.log(`API listening on :${env.PORT}`);
@@ -37,7 +41,7 @@ async function main() {
   const shutdown = async () => {
     console.log("Shutting down...");
     server.close();
-    await stopProducer();
+    // await stopProducer();
     process.exit(0);
   };
 

@@ -16,6 +16,7 @@ export function requireRole(role: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const auth0Id = (req as any).auth?.sub;
+      console.log("Checking role", role, "for user", auth0Id);
       if (!auth0Id) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -26,12 +27,19 @@ export function requireRole(role: string) {
          WHERE u.auth0_id = $1`,
         [auth0Id]
       );
+
+      console.log("User roles:", rows);
+
       const roles = rows.map((r: any) => r.role);
+
+      console.log("Required role:", role, "User roles:", roles);
       if (!roles.includes(role)) {
+        console.log("User does not have required role:", role);
         return res.status(403).json({ error: "Forbidden" });
       }
       next();
     } catch (err) {
+      console.error("Error in requireRole middleware:", err);
       next(err);
     }
   };

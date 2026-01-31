@@ -23,3 +23,7 @@ export function useMe() {
 export const isAdmin = (me: any | null) => {
   return me?.roles?.includes("ADMIN");
 };
+
+export const isSeller = (me: any | null) => {
+  return me?.roles?.includes("SELLER");
+};

@@ -1,7 +1,7 @@
-import { Kafka } from "kafkajs";
-import { env } from "../config/env";
+// import { Kafka } from "kafkajs";
+// import { env } from "../config/env";
 
-export const kafka = new Kafka({
-  clientId: "collector-backend",
-  brokers: [env.KAFKA_BROKER],
-});
+// export const kafka = new Kafka({
+//   clientId: "collector-backend",
+//   brokers: [env.KAFKA_BROKER],
+// });

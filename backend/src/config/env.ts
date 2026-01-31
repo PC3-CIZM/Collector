@@ -13,7 +13,7 @@ const schema = z.object({
   DB_PASSWORD: z.string().min(1),
   DB_NAME: z.string().min(1),
 
-  KAFKA_BROKER: z.string().min(1),
+  // KAFKA_BROKER: z.string().min(1),
 
   // Auth0 Management API credentials used for administrative actions like blocking
   // or deleting users. These credentials should be provided by your Auth0 tenant.

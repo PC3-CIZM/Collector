@@ -93,8 +93,8 @@ spec:
               value: "SuperSecretP@ssw0rd2025!"
             - name: DB_NAME
               value: "collector_db"
-            - name: KAFKA_BROKER
-              value: "kafka:29092"   # si tu n'as pas Kafka dans ton cluster, tu pourras adapter
+            # - name: KAFKA_BROKER
+            #   value: "kafka:29092"   # si tu n'as pas Kafka dans ton cluster, tu pourras adapter
           ports:
             - containerPort: 4000
 

@@ -97,3 +97,45 @@ export async function deactivateCategory(token: string, id: number) {
     method: "DELETE",
   });
 }
+
+async function req<T>(url: string, token: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchCollectorQueue(token: string) {
+  return req(`${API_BASE}/admin/collector/items`, token);
+}
+
+export async function fetchCollectorItemDetail(token: string, itemId: number) {
+  return req(`${API_BASE}/admin/collector/items/${itemId}`, token);
+}
+
+export async function fetchCollectorItemReviews(token: string, itemId: number) {
+  return req(`${API_BASE}/admin/collector/items/${itemId}/reviews`, token);
+}
+
+export async function reviewCollectorItem(
+  token: string,
+  itemId: number,
+  body: {
+    decision: "PUBLISHED" | "REJECTED";
+    notes: string;
+    traffic_photo: "GREEN" | "ORANGE" | "RED";
+    traffic_title: "GREEN" | "ORANGE" | "RED";
+    traffic_description: "GREEN" | "ORANGE" | "RED";
+  }
+) {
+  return req(`${API_BASE}/admin/collector/items/${itemId}/review`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

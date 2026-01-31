@@ -50,41 +50,41 @@ services:
     profiles: ["dev"]
     restart: unless-stopped
 
-  kafka:
-    <<: *default-logging
-    image: confluentinc/cp-kafka:7.5.0
-    environment:
-      CLUSTER_ID: "tVb9lq9vT5KJXlG7x5c2Vg"
+  # kafka:
+  #   <<: *default-logging
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   environment:
+  #     CLUSTER_ID: "tVb9lq9vT5KJXlG7x5c2Vg"
 
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_PROCESS_ROLES: broker,controller
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
 
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #     KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
 
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  #     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    ports:
-      - "127.0.0.1:29092:29092"
-    networks:
-      - collector_internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
-      interval: 20s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+  #     KAFKA_LOG_DIRS: /var/lib/kafka/data
+  #   volumes:
+  #     - kafka_data:/var/lib/kafka/data
+  #   ports:
+  #     - "127.0.0.1:29092:29092"
+  #   networks:
+  #     - collector_internal
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
+  #     interval: 20s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
 
   backend:
     <<: *default-logging
@@ -101,8 +101,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
+      # kafka:
+      #   condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health"]
@@ -127,7 +127,7 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
-  kafka_data:
+  # kafka_data:
 
 networks:
   collector_internal:

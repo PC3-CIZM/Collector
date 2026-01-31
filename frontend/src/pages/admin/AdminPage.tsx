@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AdminTemplate, { type AdminTabKey } from "./AdminTemplate";
 import AdminUsers from "./AdminUsers";
 import AdminCategories from "./AdminCategories";
+import AdminCollector from "./AdminCollector";
 import { fetchCategories, fetchUsers } from "./adminApi";
 import type { Category, User } from "./adminTypes";
 
@@ -18,7 +19,6 @@ export default function AdminPage() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-
   const reload = async () => {
     setLoading(true);
     try {
@@ -74,6 +74,7 @@ export default function AdminPage() {
           reload={reload}
         />
       }
+      collector={<AdminCollector />}
     />
   );
 }
