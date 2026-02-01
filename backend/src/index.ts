@@ -17,7 +17,6 @@ async function main() {
   const app = express();
 
   app.use(helmet());
-  app.use(
   const corsMiddleware = cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
