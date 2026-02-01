@@ -17,13 +17,20 @@ async function main() {
   const app = express();
 
   app.use(helmet());
+  const allowedOrigins = new Set([
+    env.FRONTEND_URL.replace(/\/$/, ""),
+  ]);
+
   const corsMiddleware = cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
-      const allowed = [env.FRONTEND_URL].filter(Boolean);
-      const norm = (u: string) => u.replace(/\/$/, "");
-      const ok = allowed.map(norm).includes(norm(origin));
-      if (ok) return cb(null, true);
+
+      const o = origin.replace(/\/$/, "");
+
+      if (allowedOrigins.has(o)) {
+        // IMPORTANT: return the exact origin string
+        return cb(null, origin);
+      }
       return cb(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
@@ -31,6 +38,7 @@ async function main() {
     allowedHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
   });
+
   app.use(corsMiddleware);
   app.options("*", corsMiddleware);
   app.use(express.json());
