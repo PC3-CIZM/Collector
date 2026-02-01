@@ -17,22 +17,28 @@ async function main() {
   const app = express();
 
   app.use(helmet());
-  const allowedOrigins = new Set([
-    env.FRONTEND_URL.replace(/\/$/, ""),
-  ]);
+  const norm = (u: string) => u.replace(/\/$/, "");
+  const allowedOrigins = new Set(
+    [
+      env.FRONTEND_URL,
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ]
+      .filter(Boolean)
+      .map(norm)
+  );
 
+  // 1) Guard: bloque si origin pas autorisée
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (!origin) return next(); // curl/postman
+    if (allowedOrigins.has(norm(origin))) return next();
+    return res.status(403).send(`CORS blocked for origin: ${origin}`);
+  });
+
+  // 2) CORS: reflète l'Origin (et donc écrit toujours Allow-Origin)
   const corsMiddleware = cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-
-      const o = origin.replace(/\/$/, "");
-
-      if (allowedOrigins.has(o)) {
-        // IMPORTANT: return the exact origin string
-        return cb(null, origin);
-      }
-      return cb(new Error(`CORS blocked for origin: ${origin}`));
-    },
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -41,6 +47,7 @@ async function main() {
 
   app.use(corsMiddleware);
   app.options("*", corsMiddleware);
+
   app.use(express.json());
   app.use(morgan("dev"));
 
