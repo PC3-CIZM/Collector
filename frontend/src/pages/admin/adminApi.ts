@@ -1,6 +1,6 @@
 import type { Category, User } from "./adminTypes";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export async function apiFetch<T>(
   path: string,

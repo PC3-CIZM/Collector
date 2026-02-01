@@ -122,6 +122,20 @@ jobs:
           tags: |
             ${{ env.IMAGE_BACKEND }}:${{ github.sha }}
             ${{ env.IMAGE_BACKEND }}:develop
+          build-args: |
+            AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+            AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_HOST=${{ vars.DB_HOST }}
+            DB_PORT=${{ vars.DB_PORT }}
+            KAFKA_BROKER=${{ vars.KAFKA_BROKER }}
+            AUTH0_MGMT_CLIENT_ID=${{ secrets.AUTH0_MGMT_CLIENT_ID }}
+            AUTH0_MGMT_CLIENT_SECRET=${{ secrets.AUTH0_MGMT_CLIENT_SECRET }}
+            AUTH0_MGMT_AUDIENCE=${{ secrets.AUTH0_MGMT_AUDIENCE }}
+            CONTENT_CHECK_URL=${{ vars.CONTENT_CHECK_URL }}
+            FRONTEND_URL=${{ vars.FRONTEND_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

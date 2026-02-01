@@ -1,6 +1,6 @@
 import type { Item, Shop } from "./sellerTypes";
 
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL;
 
 async function json<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(await r.text());

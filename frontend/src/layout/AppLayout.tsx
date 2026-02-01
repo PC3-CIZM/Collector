@@ -32,7 +32,7 @@ function AppShell() {
         try {
           const token = await getAccessTokenSilently();
 
-          const res = await fetch("http://localhost:4000/me/sync", {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/me/sync`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -74,7 +74,7 @@ function AppShell() {
       setModalError(null);
       const token = await getAccessTokenSilently();
 
-      const res = await fetch("http://localhost:4000/me/display-name", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/me/display-name`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
