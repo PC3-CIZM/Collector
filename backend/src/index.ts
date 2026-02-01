@@ -17,7 +17,28 @@ async function main() {
   const app = express();
 
   app.use(helmet());
-  app.use(cors({ origin: [env.FRONTEND_URL], credentials: true }));
+  app.use(
+  cors({
+    origin: (origin, cb) => {
+      // origin undefined = curl/postman
+      if (!origin) return cb(null, true);
+
+      const allowed = [env.FRONTEND_URL].filter(Boolean);
+
+      // Normalise (enlève le slash final)
+      const norm = (u: string) => u.replace(/\/$/, "");
+      const ok = allowed.map(norm).includes(norm(origin));
+
+      if (ok) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })
+);
+  app.options("*", cors());
   app.use(express.json());
   app.use(morgan("dev"));
 
