@@ -1,0 +1,41 @@
+# collector-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector-backend
+  namespace: collector
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: collector-backend
+  template:
+    metadata:
+      labels:
+        app: collector-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/pc3-cizm/collector-backend:develop
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000 # adapte si ton backend écoute ailleurs
+          envFrom:
+            - configMapRef:
+                name: collector-config
+            - secretRef:
+                name: collector-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collector-backend
+  namespace: collector
+spec:
+  selector:
+    app: collector-backend
+  ports:
+    - port: 80
+      targetPort: 4000

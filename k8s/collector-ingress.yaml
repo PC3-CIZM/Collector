@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: collector
+  namespace: collector
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: collector.20.42.31.193.nip.io
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: collector-backend
+            port:
+              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: collector-frontend
+            port:
+              number: 80
