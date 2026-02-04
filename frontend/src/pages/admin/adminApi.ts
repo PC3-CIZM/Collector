@@ -108,33 +108,21 @@ async function req<T>(url: string, token: string, init?: RequestInit): Promise<T
     },
   });
   if (!r.ok) throw new Error(await r.text());
+  if (r.status === 204) return undefined as T;
   return r.json();
 }
 
+/* COLLECTOR */
 export async function fetchCollectorQueue(token: string) {
-  return req(`${API_BASE}/admin/collector/items`, token);
-}
-
-export async function fetchCollectorItemDetail(token: string, itemId: number) {
-  return req(`${API_BASE}/admin/collector/items/${itemId}`, token);
-}
-
-export async function fetchCollectorItemReviews(token: string, itemId: number) {
-  return req(`${API_BASE}/admin/collector/items/${itemId}/reviews`, token);
+  return req<any>(`${API_BASE}/admin/collector/items`, token);
 }
 
 export async function reviewCollectorItem(
   token: string,
   itemId: number,
-  body: {
-    decision: "PUBLISHED" | "REJECTED";
-    notes: string;
-    traffic_photo: "GREEN" | "ORANGE" | "RED";
-    traffic_title: "GREEN" | "ORANGE" | "RED";
-    traffic_description: "GREEN" | "ORANGE" | "RED";
-  }
+  body: { decision: "PUBLISHED" | "REJECTED"; notes: string }
 ) {
-  return req(`${API_BASE}/admin/collector/items/${itemId}/review`, token, {
+  return req<any>(`${API_BASE}/admin/collector/items/${itemId}/review`, token, {
     method: "POST",
     body: JSON.stringify(body),
   });

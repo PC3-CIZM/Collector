@@ -2,7 +2,6 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/roles";
 import { db } from "../db/pool";
-import { runModerationCheck } from "../services/moderation.service";
 import { getDbUserFromAuthSub } from "../services/auth.service";
 
 export const sellerRouter = Router();
@@ -25,7 +24,6 @@ async function getMeUserId(req: any): Promise<number> {
  * SHOPS
  */
 
-// list my shops
 sellerRouter.get("/shops", async (req, res, next) => {
   try {
     const meId = await getMeUserId(req);
@@ -39,7 +37,6 @@ sellerRouter.get("/shops", async (req, res, next) => {
   }
 });
 
-// create shop
 sellerRouter.post("/shops", async (req, res, next) => {
   try {
     const meId = await getMeUserId(req);
@@ -61,66 +58,12 @@ sellerRouter.post("/shops", async (req, res, next) => {
   }
 });
 
-// update shop
-sellerRouter.put("/shops/:id", async (req, res, next) => {
-  try {
-    const meId = await getMeUserId(req);
-    const shopId = Number(req.params.id);
-    const name = req.body?.name ? String(req.body.name).trim() : null;
-    const description = req.body?.description !== undefined ? String(req.body.description) : null;
-    const logo_url = req.body?.logo_url !== undefined ? String(req.body.logo_url) : null;
-
-    const { rows: owned } = await db.query(`SELECT id FROM shops WHERE id=$1 AND owner_id=$2`, [
-      shopId,
-      meId,
-    ]);
-    if (!owned[0]) return res.status(403).json({ error: "Not your shop" });
-
-    const { rows } = await db.query(
-      `UPDATE shops
-       SET name = COALESCE($1, name),
-           description = COALESCE($2, description),
-           logo_url = COALESCE($3, logo_url),
-           updated_at = NOW()
-       WHERE id=$4
-       RETURNING *`,
-      [name, description, logo_url, shopId]
-    );
-
-    res.json(rows[0]);
-  } catch (e) {
-    next(e);
-  }
-});
-
-// deactivate shop
-sellerRouter.delete("/shops/:id", async (req, res, next) => {
-  try {
-    const meId = await getMeUserId(req);
-    const shopId = Number(req.params.id);
-
-    const { rows: owned } = await db.query(`SELECT id FROM shops WHERE id=$1 AND owner_id=$2`, [
-      shopId,
-      meId,
-    ]);
-    if (!owned[0]) return res.status(403).json({ error: "Not your shop" });
-
-    const { rows } = await db.query(
-      `UPDATE shops SET is_active=FALSE WHERE id=$1 RETURNING *`,
-      [shopId]
-    );
-    res.json(rows[0]);
-  } catch (e) {
-    next(e);
-  }
-});
-
 /**
- * ITEMS / LISTINGS
+ * ITEMS
  */
 
-// list my items (all statuses)
-sellerRouter.get("/items", requireAuth, requireRole("SELLER"), async (req, res, next) => {
+// list my items
+sellerRouter.get("/items", async (req, res, next) => {
   try {
     const authSub = (req as any).auth?.sub as string;
     const me = await getDbUserFromAuthSub(authSub);
@@ -131,7 +74,8 @@ sellerRouter.get("/items", requireAuth, requireRole("SELLER"), async (req, res, 
       SELECT
         i.*,
         c.name AS category_name,
-        (SELECT url FROM item_images im WHERE im.item_id = i.id ORDER BY im.position ASC LIMIT 1) AS cover_url,
+        (SELECT COALESCE(json_agg(ii ORDER BY ii.position), '[]'::json)
+         FROM item_images ii WHERE ii.item_id = i.id) AS images,
         (
           SELECT jsonb_build_object(
             'id', r.id,
@@ -162,7 +106,8 @@ sellerRouter.get("/items", requireAuth, requireRole("SELLER"), async (req, res, 
   }
 });
 
-sellerRouter.get("/items/:id", requireAuth, requireRole("SELLER"), async (req, res, next) => {
+// get detail (includes images + last review)
+sellerRouter.get("/items/:id", async (req, res, next) => {
   try {
     const authSub = (req as any).auth?.sub as string;
     const me = await getDbUserFromAuthSub(authSub);
@@ -170,7 +115,6 @@ sellerRouter.get("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
 
     const itemId = Number(req.params.id);
 
-    // ownership check
     const { rows: itemRows } = await db.query(
       `
       SELECT i.*
@@ -188,6 +132,7 @@ sellerRouter.get("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
       [itemId]
     );
 
+    // last review only (seller only needs latest note on REJECTED)
     const { rows: reviews } = await db.query(
       `
       SELECT r.id, r.decision, r.notes, r.traffic_photo, r.traffic_title, r.traffic_description, r.created_at,
@@ -196,16 +141,30 @@ sellerRouter.get("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
       LEFT JOIN users u ON u.id = r.admin_id
       WHERE r.item_id = $1
       ORDER BY r.created_at DESC
+      LIMIT 1
       `,
       [itemId]
-    );
+    ).catch(async () => {
+      const { rows } = await db.query(
+        `
+        SELECT r.id, r.decision, r.notes, r.traffic_photo, r.traffic_title, r.traffic_description, r.created_at,
+               u.display_name as admin_name
+        FROM item_reviews r
+        LEFT JOIN users u ON u.id = r.admin_id
+        WHERE r.item_id = $1
+        ORDER BY r.created_at DESC
+        LIMIT 1
+        `,
+        [itemId]
+      );
+      return { rows };
+    });
 
     res.json({ item, images, reviews });
   } catch (e) {
     next(e);
   }
 });
-
 
 // create item (DRAFT)
 sellerRouter.post("/items", async (req, res, next) => {
@@ -229,6 +188,7 @@ sellerRouter.post("/items", async (req, res, next) => {
     if (!owned[0]) return res.status(403).json({ error: "Not your shop" });
 
     if (!title || title.length < 3) return res.status(400).json({ error: "Invalid title" });
+    if (!description || description.length < 10) return res.status(400).json({ error: "Invalid description" });
     if (!price || price <= 0) return res.status(400).json({ error: "Invalid price" });
 
     const { rows: itemRows } = await db.query(
@@ -242,7 +202,6 @@ sellerRouter.post("/items", async (req, res, next) => {
 
     const item = itemRows[0];
 
-    // images (optional at create, but required at submit)
     for (let idx = 0; idx < imageUrls.length; idx++) {
       const url = String(imageUrls[idx] ?? "").trim();
       if (!url) continue;
@@ -259,8 +218,8 @@ sellerRouter.post("/items", async (req, res, next) => {
   }
 });
 
-// update item (allowed if DRAFT or PUBLISHED -> becomes PENDING_REVIEW)
-sellerRouter.put("/items/:id", requireAuth, requireRole("SELLER"), async (req, res, next) => {
+// update item (ONLY DRAFT)
+sellerRouter.put("/items/:id", async (req, res, next) => {
   try {
     const authSub = (req as any).auth?.sub as string;
     const me = await getDbUserFromAuthSub(authSub);
@@ -268,7 +227,6 @@ sellerRouter.put("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
 
     const itemId = Number(req.params.id);
 
-    // verify ownership + current status
     const { rows } = await db.query(
       `
       SELECT i.id, i.status
@@ -281,14 +239,11 @@ sellerRouter.put("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
     const existing = rows[0];
     if (!existing) return res.status(404).json({ error: "Not found" });
 
-    if (existing.status === "PENDING_REVIEW" || existing.status === "PUBLISHED" || existing.status === "SOLD") {
-      return res.status(409).json({ error: "Item cannot be edited in current status" });
+    if (existing.status !== "DRAFT") {
+      return res.status(409).json({ error: "Only DRAFT items can be edited" });
     }
 
     const { title, description, price, shipping_cost, category_id } = req.body;
-
-    // si REJECTED -> on repasse DRAFT à la première modif
-    const nextStatus = existing.status === "REJECTED" ? "DRAFT" : existing.status;
 
     const { rows: updatedRows } = await db.query(
       `
@@ -298,12 +253,11 @@ sellerRouter.put("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
           price = COALESCE($3, price),
           shipping_cost = COALESCE($4, shipping_cost),
           category_id = COALESCE($5, category_id),
-          status = $6,
           updated_at = NOW()
-      WHERE id = $7
+      WHERE id = $6
       RETURNING *
       `,
-      [title, description, price, shipping_cost, category_id, nextStatus, itemId]
+      [title, description, price, shipping_cost, category_id, itemId]
     );
 
     res.json(updatedRows[0]);
@@ -312,7 +266,7 @@ sellerRouter.put("/items/:id", requireAuth, requireRole("SELLER"), async (req, r
   }
 });
 
-// replace images (only if DRAFT or PUBLISHED -> resubmit)
+// replace images (ONLY DRAFT)
 sellerRouter.put("/items/:id/images", async (req, res, next) => {
   try {
     const meId = await getMeUserId(req);
@@ -321,7 +275,7 @@ sellerRouter.put("/items/:id/images", async (req, res, next) => {
 
     const { rows: found } = await db.query(
       `
-      SELECT i.*, s.owner_id
+      SELECT i.status, s.owner_id
       FROM items i
       JOIN shops s ON s.id = i.shop_id
       WHERE i.id=$1
@@ -331,12 +285,10 @@ sellerRouter.put("/items/:id/images", async (req, res, next) => {
     if (!found[0]) return res.status(404).json({ error: "Item not found" });
     if (found[0].owner_id !== meId) return res.status(403).json({ error: "Not your item" });
 
-    const status = String(found[0].status);
-    if (status === "PENDING_REVIEW") {
-      return res.status(409).json({ error: "Item is under review, cannot edit images" });
+    if (String(found[0].status) !== "DRAFT") {
+      return res.status(409).json({ error: "Only DRAFT items can edit images" });
     }
 
-    // replace
     await db.query(`DELETE FROM item_images WHERE item_id=$1`, [itemId]);
     for (let idx = 0; idx < imageUrls.length; idx++) {
       const url = String(imageUrls[idx] ?? "").trim();
@@ -348,49 +300,6 @@ sellerRouter.put("/items/:id/images", async (req, res, next) => {
       );
     }
 
-    // if published -> resubmit
-    const shouldResubmit = status === "PUBLISHED";
-    if (shouldResubmit) {
-      await db.query(`UPDATE items SET status='PENDING_REVIEW', updated_at=NOW() WHERE id=$1`, [itemId]);
-
-      const { rows: imgs } = await db.query(
-        `SELECT url FROM item_images WHERE item_id=$1 ORDER BY position ASC`,
-        [itemId]
-      );
-      const urls = imgs.map((x) => x.url);
-      const title = found[0].title;
-      const description = found[0].description ?? "";
-
-      const result = await runModerationCheck({ title, description, imageUrls: urls });
-
-      await db.query(
-        `
-        INSERT INTO item_moderation (item_id, title_status, description_status, images_status, auto_score, auto_details, human_status, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,'PENDING',NOW())
-        ON CONFLICT (item_id)
-        DO UPDATE SET
-          title_status=EXCLUDED.title_status,
-          description_status=EXCLUDED.description_status,
-          images_status=EXCLUDED.images_status,
-          auto_score=EXCLUDED.auto_score,
-          auto_details=EXCLUDED.auto_details,
-          human_status='PENDING',
-          reviewed_by=NULL,
-          reviewed_at=NULL,
-          reviewer_note=NULL,
-          updated_at=NOW()
-        `,
-        [
-          itemId,
-          result.title_status,
-          result.description_status,
-          result.images_status,
-          result.auto_score,
-          JSON.stringify(result.auto_details ?? {}),
-        ]
-      );
-    }
-
     res.json({ ok: true });
   } catch (e) {
     next(e);
@@ -398,7 +307,7 @@ sellerRouter.put("/items/:id/images", async (req, res, next) => {
 });
 
 // submit item to review (requires >=2 images)
-sellerRouter.post("/items/:id/submit", requireAuth, requireRole("SELLER"), async (req, res, next) => {
+sellerRouter.post("/items/:id/submit", async (req, res, next) => {
   try {
     const authSub = (req as any).auth?.sub as string;
     const me = await getDbUserFromAuthSub(authSub);
@@ -422,7 +331,6 @@ sellerRouter.post("/items/:id/submit", requireAuth, requireRole("SELLER"), async
       return res.status(409).json({ error: "Only DRAFT items can be submitted" });
     }
 
-    // vérif minimum 2 photos
     const { rows: imgRows } = await db.query(
       `SELECT COUNT(*)::int AS cnt FROM item_images WHERE item_id = $1`,
       [itemId]
@@ -431,15 +339,68 @@ sellerRouter.post("/items/:id/submit", requireAuth, requireRole("SELLER"), async
       return res.status(400).json({ error: "At least 2 images are required" });
     }
 
-    // TODO: auto-check content externe ici (title/description + photos)
-    // -> tu stockes les traffic lights dans une table/colonne ou tu les recalcules côté admin.
-    // Pour l’instant : on repasse PENDING_REVIEW.
     const { rows: upd } = await db.query(
       `UPDATE items SET status='PENDING_REVIEW', updated_at=NOW() WHERE id=$1 RETURNING *`,
       [itemId]
     );
 
     res.json(upd[0]);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// mark sold (PUBLISHED -> SOLD)
+sellerRouter.post("/items/:id/mark-sold", async (req, res, next) => {
+  try {
+    const meId = await getMeUserId(req);
+    const itemId = Number(req.params.id);
+
+    const { rows } = await db.query(
+      `
+      SELECT i.id, i.status
+      FROM items i
+      JOIN shops s ON s.id = i.shop_id
+      WHERE i.id = $1 AND s.owner_id = $2
+      `,
+      [itemId, meId]
+    );
+    const it = rows[0];
+    if (!it) return res.status(404).json({ error: "Not found" });
+    if (it.status !== "PUBLISHED") return res.status(409).json({ error: "Only PUBLISHED can be marked SOLD" });
+
+    const { rows: upd } = await db.query(
+      `UPDATE items SET status='SOLD', updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [itemId]
+    );
+    res.json(upd[0]);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// delete item (not allowed if PENDING_REVIEW)
+sellerRouter.delete("/items/:id", async (req, res, next) => {
+  try {
+    const meId = await getMeUserId(req);
+    const itemId = Number(req.params.id);
+
+    const { rows } = await db.query(
+      `
+      SELECT i.id, i.status, s.owner_id
+      FROM items i
+      JOIN shops s ON s.id = i.shop_id
+      WHERE i.id = $1
+      `,
+      [itemId]
+    );
+    const it = rows[0];
+    if (!it) return res.status(404).json({ error: "Not found" });
+    if (it.owner_id !== meId) return res.status(403).json({ error: "Not your item" });
+    if (String(it.status) === "PENDING_REVIEW") return res.status(409).json({ error: "Cannot delete under review" });
+
+    await db.query(`DELETE FROM items WHERE id=$1`, [itemId]);
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

@@ -378,26 +378,34 @@ adminRouter.get("/collector/items", requireAuth, requireAdmin, async (req, res, 
   }
 });
 
-adminRouter.get("/collector/items/:id/reviews", requireAuth, requireAdmin, async (req, res, next) => {
+// LIST PENDING_REVIEW items with moderation + images
+adminRouter.get("/collector/items", requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const itemId = Number(req.params.id);
-    const { rows } = await db.query(
-      `
-      SELECT r.id, r.decision, r.notes, r.traffic_photo, r.traffic_title, r.traffic_description, r.created_at,
-             u.display_name as admin_name
-      FROM item_reviews r
-      LEFT JOIN users u ON u.id = r.admin_id
-      WHERE r.item_id = $1
-      ORDER BY r.created_at DESC
-      `,
-      [itemId]
-    );
+    const { rows } = await db.query(`
+      SELECT
+        i.*,
+        s.name as shop_name,
+        u.display_name as seller_name,
+        u.email as seller_email,
+        COALESCE(m.title_status,'ORANGE') as title_status,
+        COALESCE(m.description_status,'ORANGE') as description_status,
+        COALESCE(m.images_status,'ORANGE') as images_status,
+        COALESCE(m.auto_score,0) as auto_score,
+        (SELECT COALESCE(json_agg(ii ORDER BY ii.position), '[]'::json) FROM item_images ii WHERE ii.item_id = i.id) AS images
+      FROM items i
+      JOIN shops s ON s.id = i.shop_id
+      JOIN users u ON u.id = s.owner_id
+      LEFT JOIN item_moderation m ON m.item_id = i.id
+      WHERE i.status = 'PENDING_REVIEW'
+      ORDER BY i.updated_at DESC
+    `);
     res.json(rows);
   } catch (e) {
     next(e);
   }
 });
 
+// REVIEW decision: publish or reject (notes required only if reject)
 adminRouter.post("/collector/items/:id/review", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const authSub = (req as any).auth?.sub as string;
@@ -405,22 +413,29 @@ adminRouter.post("/collector/items/:id/review", requireAuth, requireAdmin, async
     if (!admin) return res.status(403).json({ error: "Forbidden" });
 
     const itemId = Number(req.params.id);
-    const { decision, notes, traffic_photo, traffic_title, traffic_description } = req.body;
+    const decision = String(req.body?.decision ?? "");
+    const notes = String(req.body?.notes ?? "").trim();
 
     if (decision !== "PUBLISHED" && decision !== "REJECTED") {
       return res.status(400).json({ error: "Invalid decision" });
     }
-    if (typeof notes !== "string" || notes.trim().length < 2) {
-      return res.status(400).json({ error: "Notes are required" });
+
+    if (decision === "REJECTED" && notes.length < 2) {
+      return res.status(400).json({ error: "Notes are required when rejecting" });
     }
 
-    // log history
+    // ensure item exists & is pending
+    const { rows: cur } = await db.query(`SELECT status FROM items WHERE id=$1`, [itemId]);
+    if (!cur[0]) return res.status(404).json({ error: "Not found" });
+    if (cur[0].status !== "PENDING_REVIEW") return res.status(409).json({ error: "Item not in review" });
+
+    // log one review (traffic_* kept for compatibility)
     await db.query(
       `
       INSERT INTO item_reviews (item_id, admin_id, decision, notes, traffic_photo, traffic_title, traffic_description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES ($1,$2,$3,$4,'GREEN','GREEN','GREEN')
       `,
-      [itemId, admin.id, decision, notes.trim(), traffic_photo ?? "GREEN", traffic_title ?? "GREEN", traffic_description ?? "GREEN"]
+      [itemId, admin.id, decision, decision === "REJECTED" ? notes : ""]
     );
 
     // set item status

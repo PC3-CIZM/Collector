@@ -14,6 +14,7 @@ import {
   message,
   Divider,
   Spin,
+  Popconfirm,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -23,9 +24,9 @@ import {
   sellerReplaceImages,
   sellerSubmitItem,
   sellerUpdateItem,
-  fetchSellerItemDetail,
-  updateSellerItem,
-  submitSellerItem,
+  sellerGetItemDetail,
+  sellerMarkSold,
+  sellerDeleteItem,
   fetchCategories,
 } from "./sellerApi";
 import type { Item, Shop, Category, ItemReview } from "./sellerTypes";
@@ -40,17 +41,18 @@ const statusColor: Record<string, string> = {
   SOLD: "blue",
 };
 
-function TrafficTag({ v }: { v: "GREEN" | "ORANGE" | "RED" }) {
-  const map: any = { GREEN: "success", ORANGE: "warning", RED: "error" };
-  const label: any = { GREEN: "OK", ORANGE: "À vérifier", RED: "Non conforme" };
-  return <Tag color={map[v]}>{label[v]}</Tag>;
-}
-
 type SellerItemDetail = {
   item: Item;
   images: { id: number; url: string; position: number; is_primary: boolean }[];
   reviews: (ItemReview & { admin_name?: string | null })[];
 };
+
+function toUrls(multiline: string): string[] {
+  return String(multiline ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export default function SellerItems() {
   const { getAccessTokenSilently } = useAuth0();
@@ -58,20 +60,21 @@ export default function SellerItems() {
   const [items, setItems] = useState<Item[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-
   const [loading, setLoading] = useState(true);
 
-  // Create/Edit modal
-  const [open, setOpen] = useState(false);
+  // create/edit
+  const [editOpen, setEditOpen] = useState(false);
   const [edit, setEdit] = useState<Item | null>(null);
   const [form] = Form.useForm();
 
-  // View/Detail modal
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
+  // preview
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewValues, setPreviewValues] = useState<any>(null);
+
+  // view
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewLoading, setViewLoading] = useState(false);
   const [detail, setDetail] = useState<SellerItemDetail | null>(null);
-  const [detailEditMode, setDetailEditMode] = useState(false);
-  const [detailForm] = Form.useForm();
 
   const load = async () => {
     setLoading(true);
@@ -80,7 +83,7 @@ export default function SellerItems() {
       const [it, sh, cats] = await Promise.all([
         sellerListItems(token),
         sellerListShops(token),
-        fetchCategories(), // public categories actives
+        fetchCategories(),
       ]);
       setItems(it);
       setShops(sh);
@@ -97,13 +100,22 @@ export default function SellerItems() {
 
   const openCreate = () => {
     setEdit(null);
-    setOpen(true);
+    setEditOpen(true);
+    setPreviewOpen(false);
+    setPreviewValues(null);
     form.resetFields();
   };
 
   const openEdit = (item: Item) => {
+    if (item.status !== "DRAFT") {
+      message.warning("Seules les annonces en DRAFT sont modifiables.");
+      return;
+    }
     setEdit(item);
-    setOpen(true);
+    setEditOpen(true);
+    setPreviewOpen(false);
+    setPreviewValues(null);
+
     form.setFieldsValue({
       shop_id: item.shop_id,
       category_id: item.category_id ?? undefined,
@@ -115,14 +127,26 @@ export default function SellerItems() {
     });
   };
 
-  const save = async () => {
+  const openPreviewFromForm = async () => {
+    const values = await form.validateFields();
+    const images = toUrls(values.images);
+    const catName = categories.find((c) => c.id === values.category_id)?.name ?? "—";
+    const shopName = shops.find((s) => s.id === values.shop_id)?.name ?? "—";
+
+    setPreviewValues({
+      ...values,
+      images,
+      category_name: catName,
+      shop_name: shopName,
+    });
+    setPreviewOpen(true);
+  };
+
+  const saveDraft = async () => {
     const values = await form.validateFields();
     const token = await getAccessTokenSilently();
 
-    const images: string[] = String(values.images ?? "")
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const images = toUrls(values.images);
 
     if (!edit) {
       await sellerCreateItem(token, {
@@ -136,11 +160,6 @@ export default function SellerItems() {
       });
       message.success("Annonce créée (DRAFT)");
     } else {
-      if (edit.status === "PENDING_REVIEW") {
-        message.error("Annonce en review : modification impossible.");
-        return;
-      }
-
       await sellerUpdateItem(token, edit.id, {
         category_id: values.category_id,
         title: values.title,
@@ -148,104 +167,69 @@ export default function SellerItems() {
         price: values.price,
         shipping_cost: values.shipping_cost ?? 0,
       });
-
       await sellerReplaceImages(token, edit.id, images);
-
-      message.success(
-        edit.status === "PUBLISHED"
-          ? "Annonce modifiée : repasse en review automatiquement"
-          : "Annonce modifiée"
-      );
+      message.success("Annonce mise à jour (DRAFT)");
     }
 
-    setOpen(false);
+    setEditOpen(false);
+    setPreviewOpen(false);
+    setPreviewValues(null);
     await load();
   };
 
-  const submit = async (item: Item) => {
+  const submit = async (itemId: number, imagesCount: number) => {
     const token = await getAccessTokenSilently();
-    if (item.status !== "DRAFT") {
-      message.warning("Seules les annonces DRAFT peuvent être soumises.");
-      return;
-    }
-    if ((item.images?.length ?? 0) < 2) {
+
+    if (imagesCount < 2) {
       message.error("Minimum 2 photos requises pour soumettre.");
       return;
     }
-    await sellerSubmitItem(token, item.id);
+
+    await sellerSubmitItem(token, itemId);
     message.success("Annonce envoyée à The Collector (PENDING_REVIEW)");
+    setEditOpen(false);
+    setPreviewOpen(false);
+    setPreviewValues(null);
     await load();
   };
 
-  // ---------- Detail modal ----------
-  const openDetail = async (item: Item) => {
-    setDetailOpen(true);
-    setDetailLoading(true);
+  const openView = async (item: Item) => {
+    setViewOpen(true);
+    setViewLoading(true);
     setDetail(null);
-    setDetailEditMode(false);
 
     try {
       const token = await getAccessTokenSilently();
-      const d: SellerItemDetail = await fetchSellerItemDetail(token, item.id);
+      const d: SellerItemDetail = await sellerGetItemDetail(token, item.id);
       setDetail(d);
-
-      detailForm.setFieldsValue({
-        title: d.item.title,
-        description: d.item.description ?? "",
-        price: Number(d.item.price),
-        shipping_cost: Number(d.item.shipping_cost ?? 0),
-        category_id: d.item.category_id ?? undefined,
-      });
     } catch (e: any) {
       message.error(e?.message ?? String(e));
-      setDetailOpen(false);
+      setViewOpen(false);
     } finally {
-      setDetailLoading(false);
+      setViewLoading(false);
     }
   };
 
-  const saveDetailEdits = async () => {
-    if (!detail) return;
-
-    const values = await detailForm.validateFields();
+  const markSold = async (item: Item) => {
     const token = await getAccessTokenSilently();
-
-    try {
-      setDetailLoading(true);
-      await updateSellerItem(token, detail.item.id, values);
-
-      // reload detail
-      const d: SellerItemDetail = await fetchSellerItemDetail(token, detail.item.id);
-      setDetail(d);
-      setDetailEditMode(false);
-      message.success("Modifications enregistrées");
-      await load();
-    } catch (e: any) {
-      message.error(e?.message ?? String(e));
-    } finally {
-      setDetailLoading(false);
-    }
+    await sellerMarkSold(token, item.id);
+    message.success("Annonce archivée (SOLD)");
+    await load();
   };
 
-  const resubmitFromDetail = async () => {
-    if (!detail) return;
-
-    try {
-      const token = await getAccessTokenSilently();
-      await submitSellerItem(token, detail.item.id);
-      message.success("Annonce resoumise à The Collector (PENDING_REVIEW)");
-      setDetailOpen(false);
-      await load();
-    } catch (e: any) {
-      message.error(e?.message ?? String(e));
-    }
+  const deleteItem = async (item: Item) => {
+    const token = await getAccessTokenSilently();
+    await sellerDeleteItem(token, item.id);
+    message.success("Annonce supprimée");
+    setViewOpen(false);
+    await load();
   };
 
   const cols = useMemo(
     () => [
       { title: "ID", dataIndex: "id", width: 70 },
       {
-        title: "Titre",
+        title: "Annonce",
         render: (_: any, r: Item) => (
           <Space direction="vertical" size={0}>
             <Text strong>{r.title}</Text>
@@ -271,20 +255,47 @@ export default function SellerItems() {
       },
       {
         title: "Actions",
-        render: (_: any, r: Item) => (
-          <Space wrap>
-            <Button onClick={() => void openDetail(r)}>Voir</Button>
+        render: (_: any, r: Item) => {
+          const canEdit = r.status === "DRAFT";
+          const canSubmit = r.status === "DRAFT";
+          const canMarkSold = r.status === "PUBLISHED";
+          const canDelete = r.status !== "PENDING_REVIEW";
 
-            <Button onClick={() => openEdit(r)} disabled={r.status === "PENDING_REVIEW"}>
-              Éditer
-            </Button>
+          return (
+            <Space wrap>
+              <Button onClick={() => void openView(r)}>Voir</Button>
 
-            <Button type="primary" onClick={() => void submit(r)} disabled={r.status !== "DRAFT"}>
-              Soumettre
-            </Button>
-          </Space>
-        ),
-        width: 300,
+              <Button onClick={() => openEdit(r)} disabled={!canEdit}>
+                Modifier
+              </Button>
+
+              <Button
+                type="primary"
+                onClick={() => void submit(r.id, r.images?.length ?? 0)}
+                disabled={!canSubmit}
+              >
+                Soumettre
+              </Button>
+
+              <Button onClick={() => void markSold(r)} disabled={!canMarkSold}>
+                Marquer vendu
+              </Button>
+
+              <Popconfirm
+                title="Supprimer l'annonce ?"
+                okText="Supprimer"
+                cancelText="Annuler"
+                onConfirm={() => void deleteItem(r)}
+                disabled={!canDelete}
+              >
+                <Button danger disabled={!canDelete}>
+                  Supprimer
+                </Button>
+              </Popconfirm>
+            </Space>
+          );
+        },
+        width: 420,
       },
     ],
     [categories]
@@ -305,7 +316,7 @@ export default function SellerItems() {
         type="info"
         showIcon
         message="Rappel"
-        description="Une annonce n’est publiée qu’après validation The Collector. Toute modification d’une annonce publiée la renvoie en review."
+        description="Crée ton annonce en DRAFT, fais une preview, puis soumets (minimum 2 photos). Après rejet : crée une nouvelle annonce."
       />
 
       <Table
@@ -314,16 +325,16 @@ export default function SellerItems() {
         columns={cols as any}
         dataSource={items}
         pagination={{ pageSize: 8 }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1250 }}
       />
 
       {/* Create/Edit modal */}
       <Modal
-        title={edit ? `Éditer annonce #${edit.id}` : "Créer une annonce"}
-        open={open}
-        onCancel={() => setOpen(false)}
-        onOk={() => void save()}
-        okText="Enregistrer"
+        title={edit ? `Modifier DRAFT #${edit.id}` : "Créer une annonce (DRAFT)"}
+        open={editOpen}
+        onCancel={() => setEditOpen(false)}
+        okText="Preview"
+        onOk={() => void openPreviewFromForm()}
         width={900}
       >
         <Form layout="vertical" form={form}>
@@ -367,190 +378,180 @@ export default function SellerItems() {
 
           <Form.Item
             name="images"
-            label="Photos (URLs) — une URL par ligne (minimum 2 pour soumettre)"
+            label="Photos (URLs) — une URL par ligne (min 2 pour soumettre)"
             rules={[{ required: true }]}
           >
             <Input.TextArea rows={4} placeholder={"https://...\nhttps://..."} />
           </Form.Item>
+
+          <Divider />
+          <Space>
+            <Button onClick={() => void saveDraft()}>Enregistrer DRAFT</Button>
+            <Text type="secondary">Tu pourras prévisualiser avant de soumettre.</Text>
+          </Space>
         </Form>
       </Modal>
 
-      {/* Detail modal (notes + edit if rejected) */}
+      {/* Preview modal */}
       <Modal
-        title={detail ? `Annonce #${detail.item.id}` : "Annonce"}
-        open={detailOpen}
-        onCancel={() => setDetailOpen(false)}
+        title="Preview annonce (read-only)"
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
         footer={null}
         width={980}
       >
-        {detailLoading ? (
+        {!previewValues ? null : (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Space style={{ justifyContent: "space-between", width: "100%" }}>
+              <div>
+                <Tag color={statusColor.DRAFT}>DRAFT</Tag>{" "}
+                <Text strong>{previewValues.title}</Text>
+              </div>
+              <Space>
+                <Button onClick={() => setPreviewOpen(false)}>Modifier</Button>
+                <Button onClick={() => void saveDraft()}>Enregistrer DRAFT</Button>
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    const imgCount = (previewValues.images?.length ?? 0) as number;
+                    // si edit existe on submit l'ID existant, sinon on doit d'abord créer → on impose save draft
+                    if (!edit) {
+                      message.info("Enregistre d'abord le DRAFT, puis soumets.");
+                      return;
+                    }
+                    void submit(edit.id, imgCount);
+                  }}
+                >
+                  Soumettre
+                </Button>
+              </Space>
+            </Space>
+
+            <Alert
+              type="info"
+              showIcon
+              message="Preview"
+              description="Lecture seule. Tu peux revenir modifier, enregistrer en DRAFT, puis soumettre."
+            />
+
+            <div>
+              <Text type="secondary">Boutique</Text>
+              <div><Text strong>{previewValues.shop_name}</Text></div>
+            </div>
+
+            <div>
+              <Text type="secondary">Catégorie</Text>
+              <div><Text strong>{previewValues.category_name}</Text></div>
+            </div>
+
+            <Text type="secondary">
+              Prix: {previewValues.price}€ — Port: {previewValues.shipping_cost ?? 0}€
+            </Text>
+
+            <Divider />
+
+            <div>
+              <Text strong>Description</Text>
+              <div style={{ whiteSpace: "pre-wrap" }}>{previewValues.description}</div>
+            </div>
+
+            <Divider />
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {(previewValues.images ?? []).map((u: string) => (
+                <img
+                  key={u}
+                  src={u}
+                  alt="item"
+                  style={{ width: 140, height: 140, objectFit: "cover", borderRadius: 10, border: "1px solid #eee" }}
+                />
+              ))}
+            </div>
+          </Space>
+        )}
+      </Modal>
+
+      {/* View modal */}
+      <Modal
+        title={detail ? `Annonce #${detail.item.id}` : "Annonce"}
+        open={viewOpen}
+        onCancel={() => setViewOpen(false)}
+        footer={null}
+        width={980}
+      >
+        {viewLoading ? (
           <Spin />
         ) : !detail ? null : (
-          <>
-            <Space direction="vertical" size={6} style={{ width: "100%" }}>
-              <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
-                <div>
-                  <Tag color={statusColor[detail.item.status]}>{detail.item.status}</Tag>
-                  <Text strong style={{ marginLeft: 8 }}>
-                    {detail.item.title}
-                  </Text>
-                </div>
-
-                <Space>
-                  {/* Edit only if DRAFT or REJECTED */}
-                  <Button
-                    onClick={() => setDetailEditMode((v) => !v)}
-                    disabled={!(detail.item.status === "DRAFT" || detail.item.status === "REJECTED")}
-                  >
-                    {detailEditMode ? "Fermer édition" : "Modifier"}
-                  </Button>
-
-                  <Button
-                    type="primary"
-                    onClick={() => void resubmitFromDetail()}
-                    disabled={detail.item.status !== "DRAFT"}
-                  >
-                    Resoumettre
-                  </Button>
-                </Space>
-              </Space>
-
-              <Text type="secondary">
-                Prix: {detail.item.price}€ — Port: {detail.item.shipping_cost}€
-              </Text>
-
-              {/* Images */}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-                {(detail.images ?? []).map((im) => (
-                  <img
-                    key={im.id}
-                    src={im.url}
-                    alt="item"
-                    style={{
-                      width: 140,
-                      height: 140,
-                      objectFit: "cover",
-                      borderRadius: 10,
-                      border: "1px solid #eee",
-                    }}
-                  />
-                ))}
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Space style={{ justifyContent: "space-between", width: "100%" }}>
+              <div>
+                <Tag color={statusColor[detail.item.status]}>{detail.item.status}</Tag>{" "}
+                <Text strong>{detail.item.title}</Text>
               </div>
 
-              <Divider />
+              <Space>
+                {detail.item.status === "DRAFT" ? (
+                  <Button onClick={() => openEdit(detail.item)}>Modifier</Button>
+                ) : null}
 
-              {/* If rejected, show last admin notes */}
-              {detail.item.status === "REJECTED" && detail.reviews?.[0] ? (
-                <Alert
-                  type="error"
-                  showIcon
-                  message="Annonce rejetée"
-                  description={
-                    <div>
-                      <div style={{ marginBottom: 8 }}>
-                        <Text strong>Notes admin :</Text> {detail.reviews[0].notes}
-                      </div>
-                      <Space wrap>
-                        <span>
-                          Photos: <TrafficTag v={detail.reviews[0].traffic_photo} />
-                        </span>
-                        <span>
-                          Titre: <TrafficTag v={detail.reviews[0].traffic_title} />
-                        </span>
-                        <span>
-                          Description: <TrafficTag v={detail.reviews[0].traffic_description} />
-                        </span>
-                      </Space>
-                    </div>
-                  }
-                />
-              ) : null}
+                {detail.item.status === "PUBLISHED" ? (
+                  <Button onClick={() => void markSold(detail.item)}>Marquer vendu</Button>
+                ) : null}
 
-              {/* Edit form inside detail */}
-              {detailEditMode ? (
-                <>
-                  <Divider />
-                  <Title level={5} style={{ marginTop: 0 }}>
-                    Modifier puis enregistrer (si REJECTED, repasse en DRAFT)
-                  </Title>
-
-                  <Form layout="vertical" form={detailForm}>
-                    <Form.Item
-                      name="category_id"
-                      label="Catégorie"
-                      rules={[{ required: true, message: "Catégorie requise" }]}
-                    >
-                      <Select
-                        placeholder="Choisir une catégorie"
-                        options={categories.map((c) => ({ value: c.id, label: c.name }))}
-                      />
-                    </Form.Item>
-
-                    <Form.Item name="title" label="Titre" rules={[{ required: true, min: 3 }]}>
-                      <Input />
-                    </Form.Item>
-
-                    <Form.Item name="description" label="Description" rules={[{ required: true, min: 10 }]}>
-                      <Input.TextArea rows={5} />
-                    </Form.Item>
-
-                    <Space style={{ width: "100%" }} size="large">
-                      <Form.Item name="price" label="Prix" rules={[{ required: true }]} style={{ flex: 1 }}>
-                        <InputNumber min={1} style={{ width: "100%" }} />
-                      </Form.Item>
-                      <Form.Item name="shipping_cost" label="Frais de port" style={{ flex: 1 }}>
-                        <InputNumber min={0} style={{ width: "100%" }} />
-                      </Form.Item>
-                    </Space>
-
-                    <Button type="primary" onClick={() => void saveDetailEdits()} loading={detailLoading}>
-                      Enregistrer
-                    </Button>
-
-                    <Text type="secondary" style={{ marginLeft: 12 }}>
-                      Puis resoumettre quand c’est prêt (minimum 2 photos).
-                    </Text>
-                  </Form>
-                </>
-              ) : null}
-
-              {/* Review history */}
-              {detail.reviews?.length ? (
-                <>
-                  <Divider />
-                  <Title level={5} style={{ marginTop: 0 }}>
-                    Historique des notes (The Collector)
-                  </Title>
-
-                  <Space direction="vertical" style={{ width: "100%" }} size={10}>
-                    {detail.reviews.map((r) => (
-                      <div key={r.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
-                        <Space style={{ justifyContent: "space-between", width: "100%" }}>
-                          <Text strong>
-                            {r.decision}{" "}
-                            {r.admin_name ? <Text type="secondary">— {r.admin_name}</Text> : null}
-                          </Text>
-                          <Text type="secondary">{new Date(r.created_at).toLocaleString()}</Text>
-                        </Space>
-                        <div style={{ marginTop: 6 }}>{r.notes}</div>
-                        <Space wrap style={{ marginTop: 8 }}>
-                          <span>
-                            Photos: <TrafficTag v={r.traffic_photo} />
-                          </span>
-                          <span>
-                            Titre: <TrafficTag v={r.traffic_title} />
-                          </span>
-                          <span>
-                            Description: <TrafficTag v={r.traffic_description} />
-                          </span>
-                        </Space>
-                      </div>
-                    ))}
-                  </Space>
-                </>
-              ) : null}
+                {detail.item.status !== "PENDING_REVIEW" ? (
+                  <Popconfirm
+                    title="Supprimer l'annonce ?"
+                    okText="Supprimer"
+                    cancelText="Annuler"
+                    onConfirm={() => void deleteItem(detail.item)}
+                  >
+                    <Button danger>Supprimer</Button>
+                  </Popconfirm>
+                ) : null}
+              </Space>
             </Space>
-          </>
+
+            <Text type="secondary">
+              Prix: {detail.item.price}€ — Port: {detail.item.shipping_cost}€
+            </Text>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {(detail.images ?? []).map((im) => (
+                <img
+                  key={im.id}
+                  src={im.url}
+                  alt="item"
+                  style={{ width: 140, height: 140, objectFit: "cover", borderRadius: 10, border: "1px solid #eee" }}
+                />
+              ))}
+            </div>
+
+            <Divider />
+
+            {detail.item.status === "REJECTED" ? (
+              <Alert
+                type="error"
+                showIcon
+                message="Annonce rejetée"
+                description={
+                  <div>
+                    <div style={{ marginBottom: 8 }}>
+                      <Text strong>Note admin :</Text>{" "}
+                      {detail.reviews?.[0]?.notes ?? "—"}
+                    </div>
+                    <Text type="secondary">
+                      Pour corriger : crée une nouvelle annonce.
+                    </Text>
+                  </div>
+                }
+              />
+            ) : null}
+
+            <div>
+              <Text strong>Description</Text>
+              <div style={{ whiteSpace: "pre-wrap" }}>{detail.item.description ?? "—"}</div>
+            </div>
+          </Space>
         )}
       </Modal>
     </Space>

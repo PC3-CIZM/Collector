@@ -13,14 +13,10 @@ import {
   Tag,
   Typography,
   message,
-  Select,
+  Radio,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import {
-  fetchCollectorQueue,
-  fetchCollectorItemReviews,
-  reviewCollectorItem,
-} from "./adminApi";
+import { fetchCollectorQueue, reviewCollectorItem } from "./adminApi";
 
 const { Title, Text } = Typography;
 
@@ -43,7 +39,6 @@ type CollectorItem = {
   price: string | number;
   currency: string;
   shipping_cost: string | number;
-  stock_quantity: number;
   status: "PENDING_REVIEW";
   created_at: string;
   updated_at: string;
@@ -52,24 +47,13 @@ type CollectorItem = {
   seller_name: string | null;
   seller_email: string | null;
 
+  // auto-check
   title_status: TrafficLight;
   description_status: TrafficLight;
   images_status: TrafficLight;
   auto_score: number;
-  human_status: "PENDING" | "APPROVED" | "REJECTED";
 
   images: CollectorImage[];
-};
-
-type ItemReview = {
-  id: number;
-  decision: "PUBLISHED" | "REJECTED";
-  notes: string;
-  traffic_photo: TrafficLight;
-  traffic_title: TrafficLight;
-  traffic_description: TrafficLight;
-  created_at: string;
-  admin_name: string | null;
 };
 
 function TrafficTag({ v }: { v: TrafficLight }) {
@@ -87,10 +71,15 @@ function TrafficTag({ v }: { v: TrafficLight }) {
 }
 
 function scoreTag(score: number) {
-  if (score >= 0.8) return <Tag color="success">Score auto {Math.round(score * 100)}%</Tag>;
-  if (score >= 0.5) return <Tag color="warning">Score auto {Math.round(score * 100)}%</Tag>;
-  return <Tag color="error">Score auto {Math.round(score * 100)}%</Tag>;
+  if (score >= 0.8) return <Tag color="success">Auto {Math.round(score * 100)}%</Tag>;
+  if (score >= 0.5) return <Tag color="warning">Auto {Math.round(score * 100)}%</Tag>;
+  return <Tag color="error">Auto {Math.round(score * 100)}%</Tag>;
 }
+
+type ReviewForm = {
+  decision: "PUBLISHED" | "REJECTED";
+  notes?: string;
+};
 
 export default function AdminCollector() {
   const { getAccessTokenSilently } = useAuth0();
@@ -102,16 +91,7 @@ export default function AdminCollector() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<CollectorItem | null>(null);
 
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviews, setReviews] = useState<ItemReview[]>([]);
-
-  const [form] = Form.useForm<{
-    decision: "PUBLISHED" | "REJECTED";
-    notes: string;
-    traffic_photo: TrafficLight;
-    traffic_title: TrafficLight;
-    traffic_description: TrafficLight;
-  }>();
+  const [form] = Form.useForm<ReviewForm>();
 
   const load = async () => {
     setLoading(true);
@@ -132,55 +112,31 @@ export default function AdminCollector() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const openItem = async (it: CollectorItem) => {
+  const openItem = (it: CollectorItem) => {
     setSelected(it);
     setOpen(true);
-    setReviews([]);
     form.resetFields();
-
-    // pré-remplir avec l'automatique
-    form.setFieldsValue({
-      decision: "PUBLISHED",
-      notes: "",
-      traffic_photo: it.images_status ?? "ORANGE",
-      traffic_title: it.title_status ?? "ORANGE",
-      traffic_description: it.description_status ?? "ORANGE",
-    });
-
-    // load history
-    setReviewsLoading(true);
-    try {
-      const token = await getAccessTokenSilently();
-      const r = await fetchCollectorItemReviews(token, it.id);
-      setReviews(r as any);
-    } catch (e: any) {
-      // history non bloquante
-      message.warning(e?.message ?? "Impossible de charger l'historique");
-    } finally {
-      setReviewsLoading(false);
-    }
+    form.setFieldsValue({ decision: "PUBLISHED", notes: "" });
   };
 
   const doReview = async () => {
     if (!selected) return;
     const values = await form.validateFields();
 
+    // note obligatoire uniquement si REJECTED
+    if (values.decision === "REJECTED" && (!values.notes || values.notes.trim().length < 2)) {
+      message.error("Ajoute une note (min 2 caractères) pour rejeter.");
+      return;
+    }
+
     try {
       const token = await getAccessTokenSilently();
       await reviewCollectorItem(token, selected.id, {
         decision: values.decision,
-        notes: values.notes.trim(),
-        traffic_photo: values.traffic_photo,
-        traffic_title: values.traffic_title,
-        traffic_description: values.traffic_description,
+        notes: values.decision === "REJECTED" ? (values.notes ?? "").trim() : "",
       });
 
-      message.success(
-        values.decision === "PUBLISHED"
-          ? "Annonce publiée ✅"
-          : "Annonce rejetée ✅"
-      );
-
+      message.success(values.decision === "PUBLISHED" ? "Annonce publiée ✅" : "Annonce rejetée ✅");
       setOpen(false);
       setSelected(null);
       await load();
@@ -208,15 +164,12 @@ export default function AdminCollector() {
       },
       {
         title: "Auto-check",
-        width: 250,
+        width: 260,
         render: (_: any, r: CollectorItem) => (
           <Space wrap>
-            <span>Photos</span>
-            <TrafficTag v={r.images_status ?? "ORANGE"} />
-            <span>Titre</span>
-            <TrafficTag v={r.title_status ?? "ORANGE"} />
-            <span>Desc</span>
-            <TrafficTag v={r.description_status ?? "ORANGE"} />
+            <span>Photos</span> <TrafficTag v={r.images_status ?? "ORANGE"} />
+            <span>Titre</span> <TrafficTag v={r.title_status ?? "ORANGE"} />
+            <span>Desc</span> <TrafficTag v={r.description_status ?? "ORANGE"} />
             {scoreTag(Number(r.auto_score ?? 0))}
           </Space>
         ),
@@ -225,14 +178,13 @@ export default function AdminCollector() {
         title: "Actions",
         width: 140,
         render: (_: any, r: CollectorItem) => (
-          <Button type="primary" onClick={() => void openItem(r)}>
+          <Button type="primary" onClick={() => openItem(r)}>
             Examiner
           </Button>
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items]
+    []
   );
 
   if (error) {
@@ -248,7 +200,7 @@ export default function AdminCollector() {
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Title level={3} style={{ margin: 0 }}>
-            The Collector — Annonces à contrôler
+            The Collector — À contrôler
           </Title>
           <Button onClick={() => void load()} loading={loading}>
             Rafraîchir
@@ -259,7 +211,7 @@ export default function AdminCollector() {
           type="info"
           showIcon
           message="Rappel"
-          description="Une annonce ne peut être publiée qu'après validation humaine. Le contrôle automatique sert d'aide (icônes vert/orange/rouge + score)."
+          description="Tu examines, puis tu décides : publier ou rejeter. Si tu rejettes, tu dois laisser une note."
         />
 
         <Table
@@ -317,15 +269,13 @@ export default function AdminCollector() {
                   <Divider style={{ margin: "12px 0" }} />
                   <div>
                     <Text strong>Description</Text>
-                    <div style={{ whiteSpace: "pre-wrap" }}>
-                      {selected.description ?? "—"}
-                    </div>
+                    <div style={{ whiteSpace: "pre-wrap" }}>{selected.description ?? "—"}</div>
                   </div>
                 </Space>
               </Card>
 
               <Card size="small" title={`Photos (${selected.images?.length ?? 0})`}>
-                {((selected.images?.length ?? 0) === 0) ? (
+                {(selected.images?.length ?? 0) === 0 ? (
                   <Alert type="warning" showIcon message="Aucune photo" />
                 ) : (
                   <div
@@ -355,130 +305,39 @@ export default function AdminCollector() {
                 )}
               </Card>
 
-              <Card size="small" title="Décision humaine (à enregistrer)">
+              <Card size="small" title="Décision">
                 <Form layout="vertical" form={form}>
-                  <Space wrap style={{ width: "100%" }}>
-                    <Form.Item
-                      name="traffic_photo"
-                      label="Photos"
-                      rules={[{ required: true }]}
-                      style={{ minWidth: 180 }}
-                    >
-                      <SelectTraffic />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="traffic_title"
-                      label="Titre"
-                      rules={[{ required: true }]}
-                      style={{ minWidth: 180 }}
-                    >
-                      <SelectTraffic />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="traffic_description"
-                      label="Description"
-                      rules={[{ required: true }]}
-                      style={{ minWidth: 180 }}
-                    >
-                      <SelectTraffic />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="decision"
-                      label="Décision"
-                      rules={[{ required: true }]}
-                      style={{ minWidth: 220 }}
-                    >
-                      <SelectDecision />
-                    </Form.Item>
-                  </Space>
-
-                  <Form.Item
-                    name="notes"
-                    label="Notes pour le vendeur (obligatoire)"
-                    rules={[{ required: true, min: 2, message: "Ajoute au moins 2 caractères" }]}
-                  >
-                    <Input.TextArea rows={4} placeholder="Explique clairement ce qui doit être corrigé." />
+                  <Form.Item name="decision" rules={[{ required: true }]} initialValue="PUBLISHED">
+                    <Radio.Group>
+                      <Radio value="PUBLISHED">Publier</Radio>
+                      <Radio value="REJECTED">Rejeter</Radio>
+                    </Radio.Group>
                   </Form.Item>
 
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message="Important"
-                    description="Ces notes seront visibles côté vendeur en cas de rejet, et conservées dans l'historique lors d'une resoumission."
-                  />
+                  <Form.Item
+                    shouldUpdate={(prev, cur) => prev.decision !== cur.decision}
+                    noStyle
+                  >
+                    {() => {
+                      const d = form.getFieldValue("decision");
+                      if (d !== "REJECTED") return null;
+                      return (
+                        <Form.Item
+                          name="notes"
+                          label="Note pour le vendeur (obligatoire si rejet)"
+                          rules={[{ required: true, min: 2, message: "Min 2 caractères" }]}
+                        >
+                          <Input.TextArea rows={4} placeholder="Explique clairement ce qui ne va pas." />
+                        </Form.Item>
+                      );
+                    }}
+                  </Form.Item>
                 </Form>
-              </Card>
-
-              <Card size="small" title="Historique des notes" loading={reviewsLoading}>
-                {(reviews?.length ?? 0) === 0 ? (
-                  <Text type="secondary">Aucun historique.</Text>
-                ) : (
-                  <Space direction="vertical" style={{ width: "100%" }}>
-                    {reviews.map((r) => (
-                      <div
-                        key={r.id}
-                        style={{
-                          border: "1px solid #eee",
-                          borderRadius: 8,
-                          padding: 12,
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                          <Space wrap>
-                            <Tag color={r.decision === "PUBLISHED" ? "green" : "red"}>
-                              {r.decision}
-                            </Tag>
-                            <Text type="secondary">
-                              {new Date(r.created_at).toLocaleString()}
-                            </Text>
-                            <Text type="secondary">
-                              par {r.admin_name ?? "Admin"}
-                            </Text>
-                          </Space>
-
-                          <Space wrap>
-                            <span>Photos</span> <TrafficTag v={r.traffic_photo} />
-                            <span>Titre</span> <TrafficTag v={r.traffic_title} />
-                            <span>Desc</span> <TrafficTag v={r.traffic_description} />
-                          </Space>
-                        </div>
-                        <Divider style={{ margin: "10px 0" }} />
-                        <div style={{ whiteSpace: "pre-wrap" }}>{r.notes}</div>
-                      </div>
-                    ))}
-                  </Space>
-                )}
               </Card>
             </Space>
           )}
         </Modal>
       </Space>
     </div>
-  );
-}
-
-function SelectTraffic() {
-  return (
-    <Select
-      options={[
-        { value: "GREEN", label: "Vert (OK)" },
-        { value: "ORANGE", label: "Orange (à vérifier)" },
-        { value: "RED", label: "Rouge (non conforme)" },
-      ]}
-    />
-  );
-}
-
-function SelectDecision() {
-  return (
-    <Select
-      options={[
-        { value: "PUBLISHED", label: "Publier" },
-        { value: "REJECTED", label: "Rejeter" },
-      ]}
-    />
   );
 }

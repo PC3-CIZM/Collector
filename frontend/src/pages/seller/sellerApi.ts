@@ -1,17 +1,23 @@
-import type { Item, Shop } from "./sellerTypes";
+import type { ItemReview, Item, Shop } from "./sellerTypes";
 
 const API = import.meta.env.VITE_API_URL;
 
 async function json<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(await r.text());
+  if (r.status === 204) return undefined as T;
   return r.json();
+}
+
+function authHeaders(token: string, withJson = false) {
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(withJson ? { "Content-Type": "application/json" } : {}),
+  };
 }
 
 /* SHOPS */
 export async function sellerListShops(token: string): Promise<Shop[]> {
-  return json(
-    await fetch(`${API}/seller/shops`, { headers: { Authorization: `Bearer ${token}` } })
-  );
+  return json(await fetch(`${API}/seller/shops`, { headers: authHeaders(token) }));
 }
 
 export async function sellerCreateShop(
@@ -21,7 +27,7 @@ export async function sellerCreateShop(
   return json(
     await fetch(`${API}/seller/shops`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: authHeaders(token, true),
       body: JSON.stringify(payload),
     })
   );
@@ -29,9 +35,11 @@ export async function sellerCreateShop(
 
 /* ITEMS */
 export async function sellerListItems(token: string): Promise<Item[]> {
-  return json(
-    await fetch(`${API}/seller/items`, { headers: { Authorization: `Bearer ${token}` } })
-  );
+  return json(await fetch(`${API}/seller/items`, { headers: authHeaders(token) }));
+}
+
+export async function sellerGetItemDetail(token: string, id: number) {
+  return json<SellerItemDetail>(await fetch(`${API}/seller/items/${id}`, { headers: authHeaders(token) }));
 }
 
 export async function sellerCreateItem(
@@ -49,7 +57,7 @@ export async function sellerCreateItem(
   return json(
     await fetch(`${API}/seller/items`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: authHeaders(token, true),
       body: JSON.stringify(payload),
     })
   );
@@ -69,7 +77,7 @@ export async function sellerUpdateItem(
   return json(
     await fetch(`${API}/seller/items/${itemId}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: authHeaders(token, true),
       body: JSON.stringify(patch),
     })
   );
@@ -79,7 +87,7 @@ export async function sellerReplaceImages(token: string, itemId: number, images:
   return json(
     await fetch(`${API}/seller/items/${itemId}/images`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: authHeaders(token, true),
       body: JSON.stringify({ images }),
     })
   );
@@ -89,46 +97,38 @@ export async function sellerSubmitItem(token: string, itemId: number) {
   return json(
     await fetch(`${API}/seller/items/${itemId}/submit`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     })
   );
 }
 
-export async function fetchSellerItems(token: string) {
-  const r = await fetch(`${API}/seller/items`, { headers: { Authorization: `Bearer ${token}` } });
+export async function sellerMarkSold(token: string, itemId: number) {
+  return json(
+    await fetch(`${API}/seller/items/${itemId}/mark-sold`, {
+      method: "POST",
+      headers: authHeaders(token),
+    })
+  );
+}
+
+export async function sellerDeleteItem(token: string, itemId: number) {
+  return json(
+    await fetch(`${API}/seller/items/${itemId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    })
+  );
+}
+
+/* public categories */
+export async function fetchCategories() {
+  const r = await fetch(`${API}/categories`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export async function fetchSellerItemDetail(token: string, id: number) {
-  const r = await fetch(`${API}/seller/items/${id}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-export async function updateSellerItem(token: string, id: number, patch: any) {
-  const r = await fetch(`${API}/seller/items/${id}`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-export async function submitSellerItem(token: string, id: number) {
-  const r = await fetch(`${API}/seller/items/${id}/submit`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-export async function fetchCategories(token?: string) {
-  const r = await fetch(`${API}/categories`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
+export type SellerItemDetail = {
+  item: Item;
+  images: { id: number; url: string; position: number; is_primary: boolean }[];
+  reviews: (ItemReview & { admin_name?: string | null })[];
+};
