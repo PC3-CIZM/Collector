@@ -7,6 +7,10 @@ import { env } from "./config/env";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 import { errorHandler } from "./middleware/error";
+<<<<<<< Updated upstream
+=======
+// import { startProducer, stopProducer } from "./kafka/producer";
+>>>>>>> Stashed changes
 import { profileRouter } from "./routes/display.name";
 import { adminRouter } from "./routes/admin";
 import { sellerRouter } from "./routes/seller";
@@ -90,7 +94,25 @@ async function main() {
 
   app.use(errorHandler);
 
+<<<<<<< Updated upstream
   app.listen(env.PORT, () => console.log(`API listening on :${env.PORT}`));
+=======
+  // await startProducer();
+
+  const server = app.listen(env.PORT, () => {
+    console.log(`API listening on :${env.PORT}`);
+  });
+
+  const shutdown = async () => {
+    console.log("Shutting down...");
+    server.close();
+    // await stopProducer();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+>>>>>>> Stashed changes
 }
 
 main().catch((e) => {
