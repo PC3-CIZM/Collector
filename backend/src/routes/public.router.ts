@@ -60,13 +60,16 @@ publicRouter.get("/items", async (req, res, next) => {
       values
     );
 
-    const next = rows.length === limit ? encodeCursor(rows[rows.length - 1].updated_at, rows[rows.length - 1].id) : null;
+    const next =
+      rows.length === limit
+        ? encodeCursor(rows[rows.length - 1].updated_at, rows[rows.length - 1].id)
+        : null;
+
     res.json({ items: rows, nextCursor: next });
   } catch (e) {
     next(e);
   }
 });
-
 
 /**
  * GET /public/items/:id
@@ -122,7 +125,6 @@ publicRouter.get("/items/:id", async (req, res, next) => {
       [itemId]
     );
 
-    // 3) format de réponse attendu par ton front
     return res.json({
       item: {
         id: r.id,
@@ -153,36 +155,179 @@ publicRouter.get("/items/:id", async (req, res, next) => {
 });
 
 /**
+ * INTERNAL helper: build a safe LIKE pattern
+ */
+function mkLike(q: string) {
+  return `%${q.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+}
+
+/**
+ * GET /public/search/suggest?q=...
+ * As-you-type dropdown (petites limites)
+ * Returns { items:[], shops:[], sellers:[] }
+ */
+publicRouter.get("/search/suggest", async (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q || q.length < 2) {
+      return res.json({ items: [], shops: [], sellers: [] });
+    }
+
+    const like = mkLike(q);
+
+    const [itemsQ, shopsQ, sellersQ] = await Promise.all([
+      db.query(
+        `
+        SELECT
+          i.id, i.title, i.price, i.currency, i.shipping_cost,
+          s.id AS shop_id, s.name AS shop_name,
+          u.id AS seller_id,
+          (SELECT url FROM item_images im WHERE im.item_id = i.id ORDER BY im.position ASC LIMIT 1) AS cover_url
+        FROM items i
+        JOIN shops s ON s.id = i.shop_id AND s.is_active = TRUE
+        JOIN users u ON u.id = s.owner_id
+        WHERE i.status = 'PUBLISHED'
+          AND (
+            LOWER(i.title) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(i.description,'')) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(s.name) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+          )
+        ORDER BY i.updated_at DESC, i.id DESC
+        LIMIT 6
+        `,
+        [like]
+      ),
+      db.query(
+        `
+        SELECT
+          s.id as shop_id,
+          s.name as shop_name,
+          s.logo_url as shop_logo_url,
+          u.id as seller_id,
+          u.display_name as seller_name
+        FROM shops s
+        JOIN users u ON u.id = s.owner_id
+        WHERE s.is_active = TRUE
+          AND (
+            LOWER(s.name) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+          )
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT 6
+        `,
+        [like]
+      ),
+      db.query(
+        `
+        SELECT
+          u.id as seller_id,
+          u.display_name as seller_name,
+          (
+            SELECT COUNT(*)::int
+            FROM shops s
+            WHERE s.owner_id = u.id AND s.is_active = TRUE
+          ) as shops_count
+        FROM users u
+        WHERE LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+        ORDER BY u.id DESC
+        LIMIT 6
+        `,
+        [like]
+      ),
+    ]);
+
+    res.json({
+      items: itemsQ.rows ?? [],
+      shops: shopsQ.rows ?? [],
+      sellers: sellersQ.rows ?? [],
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
  * GET /public/search?q=...
- * Simple search on shop name OR seller display_name
+ * Recherche complète (bouton Rechercher)
+ * Returns { items:[], shops:[], sellers:[] }
  */
 publicRouter.get("/search", async (req, res, next) => {
   try {
     const q = String(req.query.q ?? "").trim();
-    if (!q || q.length < 2) return res.json([]);
+    if (!q || q.length < 2) {
+      return res.json({ items: [], shops: [], sellers: [] });
+    }
 
-    const { rows } = await db.query(
-      `
-      SELECT
-        s.id as shop_id,
-        s.name as shop_name,
-        s.logo_url as shop_logo_url,
-        u.id as seller_id,
-        u.display_name as seller_name
-      FROM shops s
-      JOIN users u ON u.id = s.owner_id
-      WHERE s.is_active = TRUE
-        AND (
-          LOWER(s.name) LIKE LOWER($1)
-          OR LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1)
-        )
-      ORDER BY s.created_at DESC
-      LIMIT 30
-      `,
-      [`%${q}%`]
-    );
+    const like = mkLike(q);
 
-    res.json(rows);
+    const [itemsQ, shopsQ, sellersQ] = await Promise.all([
+      db.query(
+        `
+        SELECT
+          i.id, i.title, i.price, i.currency, i.shipping_cost,
+          s.id AS shop_id, s.name AS shop_name,
+          u.id AS seller_id,
+          (SELECT url FROM item_images im WHERE im.item_id = i.id ORDER BY im.position ASC LIMIT 1) AS cover_url
+        FROM items i
+        JOIN shops s ON s.id = i.shop_id AND s.is_active = TRUE
+        JOIN users u ON u.id = s.owner_id
+        WHERE i.status = 'PUBLISHED'
+          AND (
+            LOWER(i.title) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(i.description,'')) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(s.name) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+          )
+        ORDER BY i.updated_at DESC, i.id DESC
+        LIMIT 60
+        `,
+        [like]
+      ),
+      db.query(
+        `
+        SELECT
+          s.id as shop_id,
+          s.name as shop_name,
+          s.logo_url as shop_logo_url,
+          u.id as seller_id,
+          u.display_name as seller_name
+        FROM shops s
+        JOIN users u ON u.id = s.owner_id
+        WHERE s.is_active = TRUE
+          AND (
+            LOWER(s.name) LIKE LOWER($1) ESCAPE '\\'
+            OR LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+          )
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT 60
+        `,
+        [like]
+      ),
+      db.query(
+        `
+        SELECT
+          u.id as seller_id,
+          u.display_name as seller_name,
+          (
+            SELECT COUNT(*)::int
+            FROM shops s
+            WHERE s.owner_id = u.id AND s.is_active = TRUE
+          ) as shops_count
+        FROM users u
+        WHERE LOWER(COALESCE(u.display_name,'')) LIKE LOWER($1) ESCAPE '\\'
+        ORDER BY u.id DESC
+        LIMIT 60
+        `,
+        [like]
+      ),
+    ]);
+
+    res.json({
+      items: itemsQ.rows ?? [],
+      shops: shopsQ.rows ?? [],
+      sellers: sellersQ.rows ?? [],
+    });
   } catch (e) {
     next(e);
   }

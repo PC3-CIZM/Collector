@@ -36,7 +36,7 @@ export default function BoutiquePage() {
   const onNotDev = (title: string) => {
     Modal.info({
       title,
-      content: "Pas encore développé (MVP CESI).",
+      content: "Pas encore développé.",
       okText: "OK",
     });
   };
@@ -46,7 +46,7 @@ export default function BoutiquePage() {
     setDetailLoading(true);
     setDetail(null);
     try {
-      const d = (await fetchPublicItemDetail(itemId)) as PublicItemDetail;
+      const d = (await fetchPublicItemDetail(itemId));
       setDetail(d);
     } catch (e: any) {
       Modal.error({ title: "Erreur", content: e?.message ?? String(e) });
@@ -78,12 +78,12 @@ export default function BoutiquePage() {
                 />
               ) : null}
               <div>
-                <Title level={3} style={{ margin: 0 }}>
+                <Title level={3} style={{ margin: 0, color: "#fff" }}>
                   {data.shop.name}
                 </Title>
-                <Text type="secondary">{data.shop.description ?? "—"}</Text>
+                <Text type="secondary" style={{ color: "#888" }}>{data.shop.description ?? "—"}</Text>
                 <div style={{ marginTop: 4 }}>
-                  <Text type="secondary">Vendeur : {data.shop.seller_name ?? "—"}</Text>
+                  <Text type="secondary" style={{ color: "#888" }}>Vendeur : {data.shop.seller_name ?? "—"}</Text>
                 </div>
               </div>
             </Space>
@@ -92,13 +92,6 @@ export default function BoutiquePage() {
               Voir profil vendeur
             </Button>
           </Space>
-
-          <Alert
-            type="info"
-            showIcon
-            message="Annonces"
-            description="Ici on affiche les annonces publiées (PUBLISHED) de cette boutique."
-          />
 
           <List
             grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3 }}

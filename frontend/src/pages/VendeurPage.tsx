@@ -39,10 +39,10 @@ export default function VendeurPage() {
         <Alert type="error" showIcon message="Vendeur introuvable" />
       ) : (
         <>
-          <Title level={3} style={{ margin: 0 }}>
+          <Title level={3} style={{ margin: 0, color: "#fff" }}>
             Profil vendeur
           </Title>
-          <Text type="secondary">
+          <Text type="secondary" style={{ color: "#888" }}>
             {data.seller.display_name ?? `Vendeur #${data.seller.id}`}
           </Text>
 
