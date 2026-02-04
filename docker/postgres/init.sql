@@ -212,3 +212,5 @@ CREATE TABLE IF NOT EXISTS item_reviews (
 );
 
 CREATE INDEX IF NOT EXISTS idx_item_reviews_item_id ON item_reviews(item_id);
+CREATE INDEX IF NOT EXISTS idx_items_status_updated_id
+ON items (status, updated_at DESC, id DESC);

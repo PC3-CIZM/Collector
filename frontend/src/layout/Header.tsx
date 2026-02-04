@@ -11,20 +11,41 @@ export function Header() {
   return (
     <header style={layout.header}>
       <div style={layout.headerLeft}>
-        <Link to="/" style={layout.brand}>Collector.shop</Link>
+        {/* Brand -> /accueil */}
+        <Link to="/accueil" style={layout.brand}>
+          Collector.shop
+        </Link>
 
         <nav style={layout.nav}>
-          <NavLink to="/service1" style={({ isActive }) => ({
-            ...layout.navLink,
-            ...(isActive ? layout.navLinkActive : {}),
-          })}>
+          {/* Accueil */}
+          <NavLink
+            to="/accueil"
+            end
+            style={({ isActive }) => ({
+              ...layout.navLink,
+              ...(isActive ? layout.navLinkActive : {}),
+            })}
+          >
+            Accueil
+          </NavLink>
+
+          <NavLink
+            to="/service1"
+            style={({ isActive }) => ({
+              ...layout.navLink,
+              ...(isActive ? layout.navLinkActive : {}),
+            })}
+          >
             Service1
           </NavLink>
 
-          <NavLink to="/service2" style={({ isActive }) => ({
-            ...layout.navLink,
-            ...(isActive ? layout.navLinkActive : {}),
-          })}>
+          <NavLink
+            to="/service2"
+            style={({ isActive }) => ({
+              ...layout.navLink,
+              ...(isActive ? layout.navLinkActive : {}),
+            })}
+          >
             Service2
           </NavLink>
 

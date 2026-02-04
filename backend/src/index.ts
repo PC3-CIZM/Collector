@@ -12,6 +12,7 @@ import { profileRouter } from "./routes/display.name";
 import { adminRouter } from "./routes/admin";
 import { sellerRouter } from "./routes/seller";
 import { publicCategoriesRouter } from "./routes/public.categories";
+import { publicRouter } from "./routes/public.router";
 
 async function main() {
   const app = express();
@@ -88,6 +89,7 @@ async function main() {
   app.use(publicCategoriesRouter);
   app.use("/seller", sellerRouter);
   app.use("/admin", adminRouter);
+  app.use("/public", publicRouter);
 
   app.use(errorHandler);
 
