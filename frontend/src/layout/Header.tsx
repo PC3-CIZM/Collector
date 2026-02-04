@@ -29,26 +29,6 @@ export function Header() {
             Accueil
           </NavLink>
 
-          <NavLink
-            to="/service1"
-            style={({ isActive }) => ({
-              ...layout.navLink,
-              ...(isActive ? layout.navLinkActive : {}),
-            })}
-          >
-            Service1
-          </NavLink>
-
-          <NavLink
-            to="/service2"
-            style={({ isActive }) => ({
-              ...layout.navLink,
-              ...(isActive ? layout.navLinkActive : {}),
-            })}
-          >
-            Service2
-          </NavLink>
-
           {seller && (
             <NavLink
               to="/seller/items"

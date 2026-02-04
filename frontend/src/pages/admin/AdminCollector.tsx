@@ -200,7 +200,7 @@ export default function AdminCollector() {
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Title level={3} style={{ margin: 0 }}>
-            The Collector — À contrôler
+            The Collector
           </Title>
           <Button onClick={() => void load()} loading={loading}>
             Rafraîchir

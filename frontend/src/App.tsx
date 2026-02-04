@@ -1,7 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "./layout/AppLayout";
-import Service1Page from "./pages/Service1Page";
-import Service2Page from "./pages/Service2Page";
 import AdminPage from "./pages/admin/AdminPage";
 import SellerPage from "./pages/seller/SellerPage";
 import { AdminRoute } from "./routes/AdminRoute";
@@ -22,9 +20,6 @@ export default function App() {
           <Route path="/accueil" element={<HomePage />} />
           <Route path="/boutique/:id" element={<BoutiquePage />} />
           <Route path="/vendeur/:id" element={<VendeurPage />} />
-
-          <Route path="/service1" element={<Service1Page />} />
-          <Route path="/service2" element={<Service2Page />} />
 
           {/* Admin (ADMIN only) */}
           <Route
