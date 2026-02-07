@@ -1,16 +1,14 @@
 name: CD - Deploy Collector to Azure Container Apps
+
 on:
   workflow_run:
     workflows: ["CI"]
     types:
       - completed
-on:
-  push:
-    branches:
-      - develop
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
