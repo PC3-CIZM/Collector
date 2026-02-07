@@ -1,16 +1,13 @@
 name: Trigger auto deployment for collector-backend
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
     branches: 
       [ master ]
     paths:
-    - '**'
+    - 'backend/**'
     - '.github/workflows/collector-backend-AutoDeployTrigger-640bcb7c-2b6c-4cd9-8695-65a31145ea46.yml'
 
-  # Allow manual trigger 
   workflow_dispatch:      
 
 jobs:
@@ -42,7 +39,7 @@ jobs:
           registryPassword: ${{ secrets.COLLECTORBACKEND_REGISTRY_PASSWORD }}
           containerAppName: collector-backend
           resourceGroup: rg-test-collector
-          imageToBuild: ghcr.io/collector-backend:${{ github.sha }}
+          imageToBuild: ghcr.io/pc3-cizm/collector-backend:${{ github.sha }}
           _buildArgumentsKey_: |
             _buildArgumentsValues_
 
