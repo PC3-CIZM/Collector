@@ -4,7 +4,7 @@ on:
   push:
     branches: [ develop ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -88,7 +88,7 @@ jobs:
     needs: [backend, frontend]
 
     # Push uniquement sur push (pas sur PR)
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
 
     permissions:
       contents: read
