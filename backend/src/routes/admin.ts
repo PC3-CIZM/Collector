@@ -9,6 +9,8 @@ import {
   changeAuth0UserPassword,
   assertAuth0DatabaseUser
 } from "../services/auth0.management";
+import { requireAdmin } from "../middleware/roles";
+import { getDbUserFromAuthSub } from "../services/auth.service";
 
 /**
  * Router providing administrative endpoints for managing users and categories.
@@ -24,12 +26,12 @@ adminRouter.use(requireAuth);
 adminRouter.use(requireRole("ADMIN"));
 
 /**
- * GET /admin/users
+ * GET /users
  *
  * Returns a list of all users with their id, auth0_id, email,
  * display_name, is_active and roles.
  */
-adminRouter.get("/admin/users", async (req, res, next) => {
+adminRouter.get("/users", async (req, res, next) => {
   try {
     const { rows } = await db.query(
       `SELECT u.id, u.auth0_id, u.email, u.display_name, u.is_active,
@@ -46,14 +48,14 @@ adminRouter.get("/admin/users", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/users/:id/active
+ * PUT /users/:id/active
  *
  * Activate or deactivate a user. The request body should contain
  * `{ isActive: boolean }`. When deactivated, the user is also blocked in
  * Auth0 so that they cannot log in. When reactivated, the user is
  * unblocked in Auth0.
  */
-adminRouter.put("/admin/users/:id/active", async (req, res, next) => {
+adminRouter.put("/users/:id/active", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const isActive = Boolean(req.body?.isActive);
@@ -78,13 +80,13 @@ adminRouter.put("/admin/users/:id/active", async (req, res, next) => {
 });
 
 /**
- * DELETE /admin/users/:id
+ * DELETE /users/:id
  *
  * Completely delete a user. This removes the user and all associated
  * records from the local database (via ON DELETE CASCADE on foreign keys)
  * and deletes the user from Auth0. Use with caution.
  */
-adminRouter.delete("/admin/users/:id", async (req, res, next) => {
+adminRouter.delete("/users/:id", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     // Find the Auth0 ID before deleting
@@ -105,14 +107,14 @@ adminRouter.delete("/admin/users/:id", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/users/:id/role
+ * PUT /users/:id/role
  *
  * Assign a new primary role to a user. The request body should contain
  * `{ role: 'BUYER' | 'SELLER' }`. This replaces any existing BUYER/SELLER
  * role assignment with the new one. The user may still retain the ADMIN
  * role if present.
  */
-adminRouter.put("/admin/users/:id/role", async (req, res, next) => {
+adminRouter.put("/users/:id/role", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const myAuth0Id = (req as any).auth?.sub;
@@ -152,11 +154,11 @@ adminRouter.put("/admin/users/:id/role", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/users/:id/display-name
+ * PUT /users/:id/display-name
  *
  * Update a user's display name. The body should contain `{ displayName: string }`.
  */
-adminRouter.put("/admin/users/:id/display-name", async (req, res, next) => {
+adminRouter.put("/users/:id/display-name", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const displayName = String(req.body?.displayName ?? "").trim();
@@ -178,13 +180,13 @@ adminRouter.put("/admin/users/:id/display-name", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/users/:id/email
+ * PUT /users/:id/email
  *
  * Update a user's email address both locally and in Auth0. The request
  * body should contain `{ email: string }`. If the email is invalid the
  * request will be rejected.
  */
-adminRouter.put("/admin/users/:id/email", async (req, res, next) => {
+adminRouter.put("/users/:id/email", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const email = String(req.body?.email ?? "").trim();
@@ -213,12 +215,12 @@ adminRouter.put("/admin/users/:id/email", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/users/:id/password
+ * PUT /users/:id/password
  *
  * Change a user's password in Auth0. The body should contain
  * `{ password: string }`. The password policy is enforced by Auth0.
  */
-adminRouter.put("/admin/users/:id/password", async (req, res, next) => {
+adminRouter.put("/users/:id/password", async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
     const newPassword = String(req.body?.password ?? "");
@@ -240,11 +242,11 @@ adminRouter.put("/admin/users/:id/password", async (req, res, next) => {
 });
 
 /**
- * GET /admin/categories
+ * GET /categories
  *
  * List all categories. Includes id, name, parent_id and is_active.
  */
-adminRouter.get("/admin/categories", async (req, res, next) => {
+adminRouter.get("/categories", async (req, res, next) => {
   try {
     const { rows } = await db.query(
       `SELECT id, name, parent_id, is_active FROM categories ORDER BY id`
@@ -256,11 +258,11 @@ adminRouter.get("/admin/categories", async (req, res, next) => {
 });
 
 /**
- * POST /admin/categories
+ * POST /categories
  *
  * Create a new category. The body should contain `{ name: string, parentId?: number }`.
  */
-adminRouter.post("/admin/categories", async (req, res, next) => {
+adminRouter.post("/categories", async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? "").trim();
     const parentId = req.body?.parentId ? Number(req.body.parentId) : null;
@@ -280,12 +282,12 @@ adminRouter.post("/admin/categories", async (req, res, next) => {
 });
 
 /**
- * PUT /admin/categories/:id
+ * PUT /categories/:id
  *
  * Update a category's name, parent or active status. Body may contain
  * `{ name?: string, parentId?: number | null, isActive?: boolean }`.
  */
-adminRouter.put("/admin/categories/:id", async (req, res, next) => {
+adminRouter.put("/categories/:id", async (req, res, next) => {
   try {
     const catId = Number(req.params.id);
     const name = req.body?.name !== undefined ? String(req.body.name).trim() : undefined;
@@ -328,13 +330,13 @@ adminRouter.put("/admin/categories/:id", async (req, res, next) => {
 });
 
 /**
- * DELETE /admin/categories/:id
+ * DELETE /categories/:id
  *
  * Soft delete a category by marking it as inactive. This preserves the
  * category record for referential integrity but prevents it from being
  * used. If the category does not exist a 404 is returned.
  */
-adminRouter.delete("/admin/categories/:id", async (req, res, next) => {
+adminRouter.delete("/categories/:id", async (req, res, next) => {
   try {
     const catId = Number(req.params.id);
     const { rows } = await db.query(
@@ -345,5 +347,106 @@ adminRouter.delete("/admin/categories/:id", async (req, res, next) => {
     res.json(rows[0]);
   } catch (err) {
     next(err);
+  }
+});
+
+// LIST PENDING_REVIEW items with moderation + images
+adminRouter.get("/collector/items", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        i.*,
+        s.name as shop_name,
+        u.display_name as seller_name,
+        u.email as seller_email,
+        COALESCE(m.title_status,'ORANGE') as title_status,
+        COALESCE(m.description_status,'ORANGE') as description_status,
+        COALESCE(m.images_status,'ORANGE') as images_status,
+        COALESCE(m.auto_score,0) as auto_score,
+        COALESCE(m.human_status,'PENDING') as human_status,
+        (SELECT COALESCE(json_agg(ii ORDER BY ii.position), '[]'::json) FROM item_images ii WHERE ii.item_id = i.id) AS images
+      FROM items i
+      JOIN shops s ON s.id = i.shop_id
+      JOIN users u ON u.id = s.owner_id
+      LEFT JOIN item_moderation m ON m.item_id = i.id
+      WHERE i.status = 'PENDING_REVIEW'
+      ORDER BY i.updated_at DESC
+    `);
+    res.json(rows);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// LIST PENDING_REVIEW items with moderation + images
+adminRouter.get("/collector/items", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        i.*,
+        s.name as shop_name,
+        u.display_name as seller_name,
+        u.email as seller_email,
+        COALESCE(m.title_status,'ORANGE') as title_status,
+        COALESCE(m.description_status,'ORANGE') as description_status,
+        COALESCE(m.images_status,'ORANGE') as images_status,
+        COALESCE(m.auto_score,0) as auto_score,
+        (SELECT COALESCE(json_agg(ii ORDER BY ii.position), '[]'::json) FROM item_images ii WHERE ii.item_id = i.id) AS images
+      FROM items i
+      JOIN shops s ON s.id = i.shop_id
+      JOIN users u ON u.id = s.owner_id
+      LEFT JOIN item_moderation m ON m.item_id = i.id
+      WHERE i.status = 'PENDING_REVIEW'
+      ORDER BY i.updated_at DESC
+    `);
+    res.json(rows);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// REVIEW decision: publish or reject (notes required only if reject)
+adminRouter.post("/collector/items/:id/review", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const authSub = (req as any).auth?.sub as string;
+    const admin = await getDbUserFromAuthSub(authSub);
+    if (!admin) return res.status(403).json({ error: "Forbidden" });
+
+    const itemId = Number(req.params.id);
+    const decision = String(req.body?.decision ?? "");
+    const notes = String(req.body?.notes ?? "").trim();
+
+    if (decision !== "PUBLISHED" && decision !== "REJECTED") {
+      return res.status(400).json({ error: "Invalid decision" });
+    }
+
+    if (decision === "REJECTED" && notes.length < 2) {
+      return res.status(400).json({ error: "Notes are required when rejecting" });
+    }
+
+    // ensure item exists & is pending
+    const { rows: cur } = await db.query(`SELECT status FROM items WHERE id=$1`, [itemId]);
+    if (!cur[0]) return res.status(404).json({ error: "Not found" });
+    if (cur[0].status !== "PENDING_REVIEW") return res.status(409).json({ error: "Item not in review" });
+
+    // log one review (traffic_* kept for compatibility)
+    await db.query(
+      `
+      INSERT INTO item_reviews (item_id, admin_id, decision, notes, traffic_photo, traffic_title, traffic_description)
+      VALUES ($1,$2,$3,$4,'GREEN','GREEN','GREEN')
+      `,
+      [itemId, admin.id, decision, decision === "REJECTED" ? notes : ""]
+    );
+
+    // set item status
+    const nextStatus = decision === "PUBLISHED" ? "PUBLISHED" : "REJECTED";
+    const { rows } = await db.query(
+      `UPDATE items SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+      [nextStatus, itemId]
+    );
+
+    res.json(rows[0]);
+  } catch (e) {
+    next(e);
   }
 });

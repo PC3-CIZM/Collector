@@ -1,12 +1,14 @@
 name: CI
 
 on:
-  # La CI se lance à chaque push sur develop
   push:
     branches: [ develop ]
-  # Et à chaque Pull Request vers develop
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # =========================
@@ -14,19 +16,18 @@ jobs:
   # =========================
   backend:
     name: Backend CI
-    runs-on: ubuntu-latest   # GitHub lance une VM Ubuntu
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-    # Toutes les commandes "run" se font dans le dossier backend/
     defaults:
       run:
         working-directory: backend
 
     steps:
-      # 1. Récupérer le code du repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installer Node.js (version 20) dans la VM
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,19 +35,13 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      # 3. Installer les dépendances du backend (à partir de package-lock.json)
       - name: Install dependencies
         run: npm ci
 
-      # 4. Lancer le lint SI le script existe dans package.json
-      #    continue-on-error: true => même si eslint trouve des erreurs,
-      #    le job continue (la CI ne devient pas rouge à cause du lint).
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
         continue-on-error: true
 
-      # 5. Build du backend (transpile TypeScript, etc.) SI le script existe
-      #    Si le build casse => le job échoue (bloquant, c'est normal).
       - name: Build (si le script existe)
         run: npm run build --if-present
 
@@ -56,18 +51,17 @@ jobs:
   frontend:
     name: Frontend CI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-    # Toutes les commandes "run" se font dans le dossier frontend/
     defaults:
       run:
         working-directory: frontend
 
     steps:
-      # 1. Récupérer le code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installer Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -75,83 +69,162 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # 3. Installer les dépendances du frontend
       - name: Install dependencies
         run: npm ci
 
-      # 4. Lancer le lint (non bloquant, comme pour le backend)
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
         continue-on-error: true
 
-      # 5. Build du frontend (Vite, etc.)
       - name: Build (si le script existe)
         run: npm run build --if-present
 
   # =========================
-  # 3) JOB DOCKER : build + push des images
+  # 3) JOB DOCKER : build + push GHCR
   # =========================
   docker-build:
-    name: Build & push Docker images
+    name: Build & push Docker images (GHCR)
     runs-on: ubuntu-latest
-
-    # Ce job n'est lancé que si backend ET frontend ont réussi
     needs: [backend, frontend]
 
-    # On donne les droits pour publier des images (packages) dans GHCR
+    # Push uniquement sur push (pas sur PR)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+
     permissions:
-      contents: read       # lire le code
-      packages: write      # pousser des images dans ghcr.io
+      contents: read
+      packages: write
 
     env:
-      # Nom du registre Docker de GitHub
-      REGISTRY: ghcr.io
-      # Nom de l'owner / organisation (ici PC3-CIZM, en minuscule)
-      OWNER: pc3-cizm
-      # Noms complets des images backend & frontend (sans tag)
       IMAGE_BACKEND: ghcr.io/pc3-cizm/collector-backend
       IMAGE_FRONTEND: ghcr.io/pc3-cizm/collector-frontend
+      IMAGE_DB: ghcr.io/pc3-cizm/collector-db
 
     steps:
-      # 1. Récupérer le code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Se connecter à GitHub Container Registry (ghcr.io)
-      #    On utilise le GITHUB_TOKEN fourni automatiquement par GitHub.
-      - name: Login to GitHub Container Registry
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. Build de l'image Docker du backend avec deux tags :
-      #    - un tag unique par commit : collector-backend:<sha>
-      #    - un tag "develop" lisible : collector-backend:develop
-      - name: Build backend image
-        run: |
-          docker build -t $IMAGE_BACKEND:${{ github.sha }} ./backend
-          docker tag $IMAGE_BACKEND:${{ github.sha }} $IMAGE_BACKEND:develop
+      # -------- BACKEND --------
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:${{ github.sha }}
+            ${{ env.IMAGE_BACKEND }}:develop
+          build-args: |
+            AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+            AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_HOST=${{ vars.DB_HOST }}
+            DB_PORT=${{ vars.DB_PORT }}
+            KAFKA_BROKER=${{ vars.KAFKA_BROKER }}
+            AUTH0_MGMT_CLIENT_ID=${{ secrets.AUTH0_MGMT_CLIENT_ID }}
+            AUTH0_MGMT_CLIENT_SECRET=${{ secrets.AUTH0_MGMT_CLIENT_SECRET }}
+            AUTH0_MGMT_AUDIENCE=${{ secrets.AUTH0_MGMT_AUDIENCE }}
+            CONTENT_CHECK_URL=${{ vars.CONTENT_CHECK_URL }}
+            FRONTEND_URL=${{ vars.FRONTEND_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # 4. Build de l'image Docker du frontend (même principe)
-      - name: Build frontend image
-        run: |
-          docker build -t $IMAGE_FRONTEND:${{ github.sha }} ./frontend
-          docker tag $IMAGE_FRONTEND:${{ github.sha }} $IMAGE_FRONTEND:develop
+      # -------- FRONTEND (VITE_* au build) --------
+      - name: Build & push frontend (with VITE build args)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
+            ${{ env.IMAGE_FRONTEND }}:develop
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}
+            VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}
+            VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # 5. Push des images backend vers GHCR
-      - name: Push backend images
-        run: |
-          docker push $IMAGE_BACKEND:${{ github.sha }}
-          docker push $IMAGE_BACKEND:develop
+      # -------- DB (postgres + init.sql) --------
+      - name: Build & push db (postgres seeded)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/postgres
+          file: ./docker/postgres/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_DB }}:${{ github.sha }}
+            ${{ env.IMAGE_DB }}:develop
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # 6. Push des images frontend vers GHCR
-      - name: Push frontend images
-        run: |
-          docker push $IMAGE_FRONTEND:${{ github.sha }}
-          docker push $IMAGE_FRONTEND:develop
+  # =========================
+  # 4) JOB DB : vérification base de données
+  # =========================
+  db-check:
+    name: Database CI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-      # 7. Afficher les images locales (juste pour les logs)
-      - name: List built images
-        run: docker images | grep collector || true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: collector_user
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: collector_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U collector_user -d collector_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Wait for database to be ready
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          for i in {1..10}; do
+            pg_isready -h localhost -p 5432 -d collector_db -U collector_user && break
+            echo "Database not ready yet, waiting..."
+            sleep 3
+          done
+
+      - name: Apply init.sql (if exists)
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          if [ -f docker/postgres/init.sql ]; then
+            echo "Found docker/postgres/init.sql, applying it..."
+            psql -h localhost -p 5432 -U collector_user -d collector_db -f docker/postgres/init.sql
+          else
+            echo "No docker/postgres/init.sql file, skipping schema init"
+          fi
+
+      - name: Run simple smoke query
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          psql -h localhost -p 5432 -U collector_user -d collector_db -c "SELECT 1;"

@@ -24,7 +24,7 @@ export function DisplayNameModal({ isOpen, onSave, error }: Props) {
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="ex: math_nowa"
+          placeholder="ex: superusername123"
           autoFocus
           style={input}
         />

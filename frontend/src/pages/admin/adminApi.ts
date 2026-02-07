@@ -1,6 +1,6 @@
 import type { Category, User } from "./adminTypes";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export async function apiFetch<T>(
   path: string,
@@ -95,5 +95,35 @@ export async function updateCategory(token: string, id: number, patch: Partial<C
 export async function deactivateCategory(token: string, id: number) {
   return apiFetch<Category>(`/admin/categories/${id}`, token, {
     method: "DELETE",
+  });
+}
+
+async function req<T>(url: string, token: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!r.ok) throw new Error(await r.text());
+  if (r.status === 204) return undefined as T;
+  return r.json();
+}
+
+/* COLLECTOR */
+export async function fetchCollectorQueue(token: string) {
+  return req<any>(`${API_BASE}/admin/collector/items`, token);
+}
+
+export async function reviewCollectorItem(
+  token: string,
+  itemId: number,
+  body: { decision: "PUBLISHED" | "REJECTED"; notes: string }
+) {
+  return req<any>(`${API_BASE}/admin/collector/items/${itemId}/review`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
