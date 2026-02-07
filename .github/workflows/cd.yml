@@ -1,5 +1,9 @@
 name: CD - Deploy Collector to Azure Container Apps
-
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 on:
   push:
     branches:
