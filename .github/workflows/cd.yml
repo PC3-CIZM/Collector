@@ -1,4 +1,4 @@
-name: CD - Deploy Backend to Azure
+name: CD - Deploy Collector to Azure Container Apps
 
 on:
   push:
@@ -9,30 +9,39 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    permissions:
+      id-token: write
+      contents: read
 
-      - name: Login to Azure
+    steps:
+      - name: Login to Azure (OIDC)
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Login to Azure Container Registry
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}
-          username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
-          password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+      # ==========================
+      # DEPLOY EXISTING IMAGES
+      # ==========================
 
-      - name: Build and push backend image
+      - name: Deploy DB
         run: |
-          docker build -t ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/collector-backend:latest ./backend
-          docker push ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/collector-backend:latest
+          az containerapp update \
+            -n collector-db \
+            -g rg-test-collector \
+            --image ghcr.io/pc3-cizm/collector-db:develop
 
-      - name: Deploy to Azure Container App
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          resourceGroup: rg-collector
-          containerAppName: collector-backend
-          imageToDeploy: ${{ secrets.AZURE_REGISTRY_LOGIN_SERVER }}/collector-backend:latest
+      - name: Deploy Backend
+        run: |
+          az containerapp update \
+            -n collector-backend \
+            -g rg-test-collector \
+            --image ghcr.io/pc3-cizm/collector-backend:develop
+
+      - name: Deploy Frontend
+        run: |
+          az containerapp update \
+            -n collector-frontend \
+            -g rg-test-collector \
+            --image ghcr.io/pc3-cizm/collector-frontend:develop
