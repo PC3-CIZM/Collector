@@ -34,7 +34,7 @@ jobs:
       CONTENT_CHECK_URL: "http://localhost"
       FRONTEND_URL: "http://localhost"
 
-      # Force install devDependencies in CI (fix "jest: not found")
+      # Ensure devDependencies are installed
       NODE_ENV: "development"
       npm_config_production: "false"
       npm_config_omit: ""
@@ -54,7 +54,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Backend unit tests (Jest)
-        run: npx --no-install jest
+        run: npm test
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
@@ -83,7 +83,7 @@ jobs:
       VITE_AUTH0_CLIENT_ID: "dummy"
       VITE_AUTH0_AUDIENCE: "dummy"
 
-      # Force install devDependencies in CI (fix "vitest: not found")
+      # Ensure devDependencies are installed
       NODE_ENV: "development"
       npm_config_production: "false"
       npm_config_omit: ""
@@ -103,7 +103,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Frontend unit tests (Vitest run)
-        run: npx --no-install vitest run
+        run: npm run test:run --if-present
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
@@ -202,7 +202,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 4) JOB DB: vérification base de données
+  # =========================
+  # 4) JOB DB : vérification base de données
   # =========================
   db-check:
     name: Database CI
