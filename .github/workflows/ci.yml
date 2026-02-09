@@ -34,6 +34,11 @@ jobs:
       CONTENT_CHECK_URL: "http://localhost"
       FRONTEND_URL: "http://localhost"
 
+      # ✅ Force npm to NOT run in production mode (so devDependencies get installed)
+      NODE_ENV: "development"
+      npm_config_production: "false"
+      NPM_CONFIG_PRODUCTION: "false"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,16 +50,17 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies (WITH devDependencies)
+      - name: Install dependencies (include devDependencies)
         run: |
-          npm ci --include=dev
-          echo "==== node_modules/.bin (backend) ===="
+          npm config set production false
+          npm ci --include=dev --no-audit --no-fund
+          echo "==== backend node_modules/.bin ===="
           ls -la node_modules/.bin || true
 
       - name: Backend unit tests (Jest)
         run: |
-          ./node_modules/.bin/jest --version
-          ./node_modules/.bin/jest
+          npx --yes jest --version
+          npx --yes jest
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
@@ -83,6 +89,11 @@ jobs:
       VITE_AUTH0_CLIENT_ID: "dummy"
       VITE_AUTH0_AUDIENCE: "dummy"
 
+      # ✅ Force npm to NOT run in production mode (so devDependencies get installed)
+      NODE_ENV: "development"
+      npm_config_production: "false"
+      NPM_CONFIG_PRODUCTION: "false"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -94,16 +105,17 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies (WITH devDependencies)
+      - name: Install dependencies (include devDependencies)
         run: |
-          npm ci --include=dev
-          echo "==== node_modules/.bin (frontend) ===="
+          npm config set production false
+          npm ci --include=dev --no-audit --no-fund
+          echo "==== frontend node_modules/.bin ===="
           ls -la node_modules/.bin || true
 
       - name: Frontend unit tests (Vitest run)
         run: |
-          ./node_modules/.bin/vitest --version
-          ./node_modules/.bin/vitest run
+          npx --yes vitest --version
+          npx --yes vitest run
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
