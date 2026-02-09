@@ -34,10 +34,10 @@ jobs:
       CONTENT_CHECK_URL: "http://localhost"
       FRONTEND_URL: "http://localhost"
 
-      # ✅ Force npm to NOT run in production mode (so devDependencies get installed)
+      # Force devDependencies install in CI
       NODE_ENV: "development"
       npm_config_production: "false"
-      NPM_CONFIG_PRODUCTION: "false"
+      npm_config_omit: ""
 
     steps:
       - name: Checkout repository
@@ -51,16 +51,10 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies (include devDependencies)
-        run: |
-          npm config set production false
-          npm ci --include=dev --no-audit --no-fund
-          echo "==== backend node_modules/.bin ===="
-          ls -la node_modules/.bin || true
+        run: npm ci --include=dev
 
       - name: Backend unit tests (Jest)
-        run: |
-          npx --yes jest --version
-          npx --yes jest
+        run: npm test
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
@@ -89,10 +83,10 @@ jobs:
       VITE_AUTH0_CLIENT_ID: "dummy"
       VITE_AUTH0_AUDIENCE: "dummy"
 
-      # ✅ Force npm to NOT run in production mode (so devDependencies get installed)
+      # Force devDependencies install in CI
       NODE_ENV: "development"
       npm_config_production: "false"
-      NPM_CONFIG_PRODUCTION: "false"
+      npm_config_omit: ""
 
     steps:
       - name: Checkout repository
@@ -106,16 +100,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies (include devDependencies)
-        run: |
-          npm config set production false
-          npm ci --include=dev --no-audit --no-fund
-          echo "==== frontend node_modules/.bin ===="
-          ls -la node_modules/.bin || true
+        run: npm ci --include=dev
 
       - name: Frontend unit tests (Vitest run)
-        run: |
-          npx --yes vitest --version
-          npx --yes vitest run
+        run: npm run test:run --if-present
 
       - name: Lint (si le script existe - n'empêche pas la CI)
         run: npm run lint --if-present
@@ -132,6 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
 
+    # Push uniquement sur push (pas sur PR)
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
 
     permissions:
@@ -157,6 +146,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # -------- BACKEND --------
       - name: Build & push backend
         uses: docker/build-push-action@v6
         with:
@@ -182,6 +172,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ----- FRONTEND ------
       - name: Build & push frontend (with VITE build args)
         uses: docker/build-push-action@v6
         with:
@@ -198,6 +189,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ----- DB -----
       - name: Build & push db (postgres seeded)
         uses: docker/build-push-action@v6
         with:
