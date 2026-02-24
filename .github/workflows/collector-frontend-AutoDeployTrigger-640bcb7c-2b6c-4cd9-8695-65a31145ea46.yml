@@ -2,11 +2,10 @@ name: Trigger auto deployment for collector-frontend
 
 on:
   push:
-    branches:
-      [ master ]
+    branches: [ master ]
     paths:
-      - 'frontend/**'
-      - '.github/workflows/collector-frontend-AutoDeployTrigger-640bcb7c-2b6c-4cd9-8695-65a31145ea46.yml'
+      - "frontend/**"
+      - ".github/workflows/collector-frontend-AutoDeployTrigger-640bcb7c-2b6c-4cd9-8695-65a31145ea46.yml"
 
   workflow_dispatch:
 
@@ -19,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v2
@@ -28,17 +27,18 @@ jobs:
           tenant-id: ${{ secrets.COLLECTORFRONTEND_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.COLLECTORFRONTEND_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
+      - name: Build and deploy (frontend)
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}/frontend
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
           registryUrl: ghcr.io
           registryUsername: ${{ secrets.COLLECTORFRONTEND_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.COLLECTORFRONTEND_REGISTRY_PASSWORD }}
           containerAppName: collector-frontend
           resourceGroup: rg-test-collector
           imageToBuild: ghcr.io/pc3-cizm/collector-frontend:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
+          buildArguments: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}
+            VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}
+            VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}
